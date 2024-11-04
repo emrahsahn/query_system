@@ -1,7 +1,9 @@
 # query_system
 This project is a simple animal information query system developed using Python, SQLite, and PyQt5. The system allows users to store, query, and display information about animals.
 ![Ekran görüntüsü 2024-11-05 000923](https://github.com/user-attachments/assets/5f687290-352e-4478-8ab8-9f87649a374f)
-
+![Ekran görüntüsü 2024-11-05 000943](https://github.com/user-attachments/assets/dc0ac5a0-8ae1-4dc8-baff-4b44fa8bb96b)
+![Ekran görüntüsü 2024-11-05 001021](https://github.com/user-attachments/assets/bdd6d3cd-c9e4-4ec5-9bfa-7d4b1247a7b9)
+![Ekran görüntüsü 2024-11-05 001005](https://github.com/user-attachments/assets/3e31193c-8a32-4f40-97e7-3cfe8b104a16)
 ## Features
 
 - **SQLite Database**: Stores information about animals, such as their type, color, owner, and price.
@@ -42,6 +44,4 @@ This project is a simple animal information query system developed using Python,
 
 If you want to contribute to this project, please fork the repository, create a new branch, and submit a pull request. You can also open issues for bugs or feature requests.
 
-![Ekran görüntüsü 2024-11-05 000943](https://github.com/user-attachments/assets/dc0ac5a0-8ae1-4dc8-baff-4b44fa8bb96b)
-![Ekran görüntüsü 2024-11-05 001021](https://github.com/user-attachments/assets/bdd6d3cd-c9e4-4ec5-9bfa-7d4b1247a7b9)
-![Ekran görüntüsü 2024-11-05 001005](https://github.com/user-attachments/assets/3e31193c-8a32-4f40-97e7-3cfe8b104a16)
+
