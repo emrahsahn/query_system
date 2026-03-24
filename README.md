@@ -5,6 +5,7 @@
 Uygulamanın masaüstü tasarımdan web arayüzüne çevrilmesi ve modern tasarımıyla ön plana çıkan **Görsel Kart UI yapısı**, veri güvenlik (Validation) filtreleri ile son derece kullanıcı dostudur. Supabase vb. bulut (Cloud) tabanlı SQL yapılarına taşınmaya %100 uygun kodlama esasına dayanır.
 
 ---
+<img width="1919" height="899" alt="image" src="https://github.com/user-attachments/assets/338373ac-a917-4856-b90d-3876ac1e95a7" />
 
 ## ✨ Projenin Temel Özellikleri
 
