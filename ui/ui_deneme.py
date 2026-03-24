@@ -1,6 +1,7 @@
 # app.py
 import os
 import sys
+import html
 
 import streamlit as st
 
@@ -142,25 +143,27 @@ def display_customer_cards(customers):
             if idx < len(customers):
                 cust = customers[idx]
                 
+                # XSS benzeri enjeksiyona karşı kullanıcı verisini escape et
+                e = html.escape
                 card_html = f"""
                 <div class="customer-card">
                     <div>
                         <div class="card-header">
-                            <span class="card-id">#{cust.number}</span>
-                            <span class="card-type">{cust.type}</span>
+                            <span class="card-id">#{e(str(cust.number))}</span>
+                            <span class="card-type">{e(str(cust.type))}</span>
                         </div>
                         <div class="card-body">
-                            <p><strong>✨ Özellik:</strong> <span>{cust.special}</span></p>
-                            <p><strong>🏷️ Küpe:</strong> <span>{cust.color_of_earring}</span></p>
-                            <p><strong>🎨 Renk:</strong> <span>{cust.color_of_animal}</span></p>
-                            <p><strong>👤 Sahip:</strong> <span>{cust.whose}</span></p>
-                            <p><strong>📦 Kimden:</strong> <span>{cust.from_whom}</span></p>
-                            <p><strong>📞 Tlf:</strong> <span>{cust.phone_number}</span></p>
-                            <p><strong>💳 Ödeme:</strong> <span>{cust.payment_method}</span></p>
+                            <p><strong>✨ Özellik:</strong> <span>{e(str(cust.special))}</span></p>
+                            <p><strong>🏷️ Küpe:</strong> <span>{e(str(cust.color_of_earring))}</span></p>
+                            <p><strong>🎨 Renk:</strong> <span>{e(str(cust.color_of_animal))}</span></p>
+                            <p><strong>👤 Sahip:</strong> <span>{e(str(cust.whose))}</span></p>
+                            <p><strong>📦 Kimden:</strong> <span>{e(str(cust.from_whom))}</span></p>
+                            <p><strong>📞 Tlf:</strong> <span>{e(str(cust.phone_number))}</span></p>
+                            <p><strong>💳 Ödeme:</strong> <span>{e(str(cust.payment_method))}</span></p>
                         </div>
                     </div>
                     <div class="price-tag">
-                        💰 {cust.price} ₺
+                        💰 {e(str(cust.price))} ₺
                     </div>
                 </div>
                 """
@@ -253,8 +256,17 @@ elif choice == "Müşterileri Sorgula":
         elif q_choice == "Türe Göre":
             res = library.query_animal_type(kind, return_objects=True)
         elif q_choice == "Telefon Numarasına Göre":
-            formatted = f"{phone[:4]} {phone[4:7]} {phone[7:9]} {phone[9:]}"
-            res = library.query_animal_phone_number(formatted, return_objects=True)
+            # Normalize et: boşluk ve '-' temizle, 10/11 hane kontrolü
+            raw_phone = phone or ""
+            normalized = raw_phone.replace(" ", "").replace("-", "")
+            if len(normalized) == 10 and not normalized.startswith("0"):
+                normalized = "0" + normalized
+            if not (len(normalized) == 11 and normalized.isdigit()):
+                st.error("❌ Lütfen geçerli bir telefon numarası girin. (Örn: 0532 123 45 67)")
+                res = []
+            else:
+                formatted = f"{normalized[:4]} {normalized[4:7]} {normalized[7:9]} {normalized[9:]}"
+                res = library.query_animal_phone_number(formatted, return_objects=True)
         
         display_customer_cards(res)
 
