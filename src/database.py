@@ -9,14 +9,27 @@ class Library():
 
     def create_connect(self):
         '''This function allows to create data'''
-        self.connect = sqlite3.connect(database=DATABASE_DIR)
+        self.connect = sqlite3.connect(database=str(DATABASE_DIR))
         self.cursor = self.connect.cursor()
 
-        query = "Create table If not exists kurbanlık_hesap (number TEXT,type TEXT,special TEXT,color_of_earring TEXT" \
-                ",color_of_animal TEXT,whose TEXT,from_whom TEXT,price FLOAT,phone_number TEXT)"
-
+        # Kanónik şema - kolon sırası: number, type, special, color_of_earring,
+        # color_of_animal, whose, from_whom, price, phone_number, payment_method
+        query = (
+            "CREATE TABLE IF NOT EXISTS kurbanlık_hesap ("
+            "number TEXT, type TEXT, special TEXT, color_of_earring TEXT,"
+            "color_of_animal TEXT, whose TEXT, from_whom TEXT,"
+            "price FLOAT, phone_number TEXT, payment_method TEXT)"
+        )
         self.cursor.execute(query)
-        # self.cursor.execute("ALTER TABLE kurbanlık_hesap ADD COLUMN payment_method TEXT")
+
+        # Migration: eski veritabanlarında payment_method kolonu yoksa ekle
+        try:
+            self.cursor.execute(
+                "ALTER TABLE kurbanlık_hesap ADD COLUMN payment_method TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass  # Kolon zaten var
+
         self.connect.commit()
 
     def interrupt_connection(self):
@@ -138,16 +151,26 @@ class Library():
 ################################
 #       EKLEME ALANLARI
 ################################
-    def add(self,customer):
-        '''This funciton allows adding new data to the data'''
-        query = "INSERT INTO kurbanlık_hesap VALUES(?,?,?,?,?,?,?,?,?,?)"
-
-        new_phone_number = f"{customer.phone_number[:4]} {customer.phone_number[4:7]} {customer.phone_number[7:9]} " \
-                           f"{customer.phone_number[9:]}"   # this line allows to save in data how ı want
-        self.cursor.execute(query,(customer.number,customer.type,customer.special,customer.color_of_earring,
-                                   customer.color_of_animal,
-                                   customer.whose,customer.from_whom,customer.price,new_phone_number,customer.payment_method))
-        self.connect.commit()     # this line allows to save in data
+    def add(self, customer):
+        '''This function allows adding new data to the data'''
+        # Kolon listesi açıkça belirtiliyor - şema değişse dahi güvenli
+        query = (
+            "INSERT INTO kurbanlık_hesap "
+            "(number, type, special, color_of_earring, color_of_animal, "
+            "whose, from_whom, price, phone_number, payment_method) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        new_phone_number = (
+            f"{customer.phone_number[:4]} {customer.phone_number[4:7]} "
+            f"{customer.phone_number[7:9]} {customer.phone_number[9:]}"
+        )
+        self.cursor.execute(query, (
+            customer.number, customer.type, customer.special,
+            customer.color_of_earring, customer.color_of_animal,
+            customer.whose, customer.from_whom, customer.price,
+            new_phone_number, customer.payment_method
+        ))
+        self.connect.commit()
 
     def count_data(self):
         '''This function is count the data'''
@@ -196,11 +219,11 @@ class Library():
             self.connect.rollback()  # undo process
             print("Veri güncelleme hatası:", str(e))
 
-    def upgrade_data_feature(self,number_to_update,new_special):
+    def upgrade_data_feature(self, number_to_update, new_special):
         '''This function is allows us to update special data'''
         try:
-            update_query = "UPDATE kurbanlık_hesap SET speacial = ? WHERE number = ?"
-            self.cursor.execute(update_query, (new_special, number_to_update))    # this line allows to update new_special
+            update_query = "UPDATE kurbanlık_hesap SET special = ? WHERE number = ?"
+            self.cursor.execute(update_query, (new_special, number_to_update))
             self.connect.commit()
         except sqlite3.Error as e:
             self.connect.rollback()
