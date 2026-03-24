@@ -95,7 +95,7 @@ Eğer tarayıcı kendiliğinden açılmazsa, [http://localhost:8501](http://loca
 - Çift port/sekme bug'ı oluşmaması ve kodun kendi kendini tetiklememesi için lütfen projeyi başlatırken kasten `streamlit run main.py` **YAZMAMAYA** özen gösterin. 
 - Eğer direkt manuel çalıştırmak isterseniz (`main.py` wrapper'i kullanmadan) => `streamlit run ../ui/ui_deneme.py` komutu kullanılabilir.
 - Parasal değerlerde küsürat kuruşu `00` olarak değerlendirilir. Günümüzde "Virgül ile kuruş yazma" engellenmiştir. Örn `1400.00` Nokta formatındadır.
-- **Güvenli Yedekleme:** SQLite dosyası bilgisayarda fiziki olarak durduğu için bulut üzerine geçilmeden önce sistem formatlanırken veya bilgisayar devredilirken proje klasöründeki dosyaların `.sqlite` veya veri klasörünün yedeklenmesi şarttır!
+- **Güvenli Yedekleme:** SQLite dosyası bilgisayarda fiziki olarak durduğu için bulut üzerine geçilmeden önce sistem formatlanırken veya bilgisayar devredilirken proje klasöründeki. dosyaların `.sqlite` veya veri klasörünün yedeklenmesi şarttır!
 
 ---
 
