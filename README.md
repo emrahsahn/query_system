@@ -5,6 +5,11 @@
 Uygulamanın masaüstü tasarımdan web arayüzüne çevrilmesi ve modern tasarımıyla ön plana çıkan **Görsel Kart UI yapısı**, veri güvenlik (Validation) filtreleri ile son derece kullanıcı dostudur. Supabase vb. bulut (Cloud) tabanlı SQL yapılarına taşınmaya %100 uygun kodlama esasına dayanır.
 
 ---
+<img width="1919" height="899" alt="image" src="https://github.com/user-attachments/assets/338373ac-a917-4856-b90d-3876ac1e95a7" />
+<img width="1343" height="808" alt="image" src="https://github.com/user-attachments/assets/c6713580-80c1-4f26-8ad9-b301d5259c5f" /> <img width="363" height="521" alt="image" src="https://github.com/user-attachments/assets/ff4b997c-cd0e-4639-b765-2678b4a47ec8" />
+<img width="1889" height="833" alt="image" src="https://github.com/user-attachments/assets/3117eb49-7296-4825-aba9-99c76eb1fa63" />
+
+
 
 ## ✨ Projenin Temel Özellikleri
 
@@ -95,7 +100,7 @@ Eğer tarayıcı kendiliğinden açılmazsa, [http://localhost:8501](http://loca
 - Çift port/sekme bug'ı oluşmaması ve kodun kendi kendini tetiklememesi için lütfen projeyi başlatırken kasten `streamlit run main.py` **YAZMAMAYA** özen gösterin. 
 - Eğer direkt manuel çalıştırmak isterseniz (`main.py` wrapper'i kullanmadan) => `streamlit run ../ui/ui_deneme.py` komutu kullanılabilir.
 - Parasal değerlerde küsürat kuruşu `00` olarak değerlendirilir. Günümüzde "Virgül ile kuruş yazma" engellenmiştir. Örn `1400.00` Nokta formatındadır.
-- **Güvenli Yedekleme:** SQLite dosyası bilgisayarda fiziki olarak durduğu için bulut üzerine geçilmeden önce sistem formatlanırken veya bilgisayar devredilirken proje klasöründeki. dosyaların `.sqlite` veya veri klasörünün yedeklenmesi şarttır!
+- **Güvenli Yedekleme:** SQLite dosyası bilgisayarda fiziki olarak durduğu için bulut üzerine geçilmeden önce sistem formatlanırken veya bilgisayar devredilirken proje klasöründeki.. dosyaların `.sqlite` veya veri klasörünün yedeklenmesi şarttır!
 
 ---
 
