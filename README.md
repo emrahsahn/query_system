@@ -6,6 +6,10 @@ Uygulamanın masaüstü tasarımdan web arayüzüne çevrilmesi ve modern tasar�
 
 ---
 <img width="1919" height="899" alt="image" src="https://github.com/user-attachments/assets/338373ac-a917-4856-b90d-3876ac1e95a7" />
+<img width="1343" height="808" alt="image" src="https://github.com/user-attachments/assets/c6713580-80c1-4f26-8ad9-b301d5259c5f" />
+<img width="363" height="521" alt="image" src="https://github.com/user-attachments/assets/ff4b997c-cd0e-4639-b765-2678b4a47ec8" />
+
+
 
 ## ✨ Projenin Temel Özellikleri
 
