@@ -20,7 +20,63 @@ from src.database import Library
 # Initialize database
 library = Library()
 
-st.set_page_config(page_title="Kurbanlık Program ", layout="wide")
+st.set_page_config(page_title="Kurbanlık Program", layout="wide", initial_sidebar_state="expanded")
+
+# ── Gece / Gündüz modu state ──────────────────────────────────────────────────
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = True   # varsayılan: koyu tema
+
+# ── Tema CSS ──────────────────────────────────────────────────────────────────
+if st.session_state.dark_mode:
+    theme_css = """
+    <style>
+    /* ===== KOYU TEMA ===== */
+    html, body, [data-testid="stAppViewContainer"],
+    [data-testid="stSidebar"] {
+        background-color: #0f0f1a !important;
+        color: #e8eaf6 !important;
+    }
+    [data-testid="stHeader"] { background: #0f0f1a !important; }
+    [data-testid="stSidebar"] { background: #14142b !important; }
+    .stSelectbox > div, .stTextInput > div > div,
+    .stRadio > div, .stForm { color: #e8eaf6 !important; }
+    .stButton > button {
+        background: linear-gradient(135deg, #5352ed, #3742fa);
+        color: white; border: none; border-radius: 8px;
+    }
+    .stButton > button:hover { opacity: 0.88; }
+    </style>
+    """
+else:
+    theme_css = """
+    <style>
+    /* ===== AÇIK TEMA ===== */
+    html, body, [data-testid="stAppViewContainer"] {
+        background-color: #f5f7fa !important;
+        color: #1a1a2e !important;
+    }
+    [data-testid="stHeader"] { background: #f5f7fa !important; }
+    [data-testid="stSidebar"] { background: #e8edf5 !important; color: #1a1a2e !important; }
+    .customer-card {
+        background: linear-gradient(145deg, #ffffff, #eef2ff) !important;
+        border: 1px solid #c5cae9 !important;
+        color: #1a1a2e !important;
+    }
+    .customer-card:hover { border-color: #5352ed !important; }
+    .card-id   { color: #d32f2f !important; }
+    .card-type { background-color: #5352ed !important; }
+    .card-body p { color: #424242 !important; }
+    .card-body strong { color: #2e7d32 !important; }
+    .price-tag { color: #e65100 !important; background: #fff3e020 !important; }
+    .stButton > button {
+        background: linear-gradient(135deg, #5352ed, #3742fa);
+        color: white; border: none; border-radius: 8px;
+    }
+    .stButton > button:hover { opacity: 0.88; }
+    </style>
+    """
+
+st.markdown(theme_css, unsafe_allow_html=True)
 
 st.title("🐐 Kurbanlık Takip Sistemi")
 
@@ -37,6 +93,14 @@ menu = [
     "Müşteri Silme"
 ]
 choice = st.sidebar.selectbox("İşlem Seçin", menu)
+
+# ── Gece/Gündüz Butonu ────────────────────────────────────────────────────────
+st.sidebar.markdown("---")
+mode_label = "☀️ Gündüz Moduna Geç" if st.session_state.dark_mode else "🌙 Gece Moduna Geç"
+if st.sidebar.button(mode_label, use_container_width=True):
+    st.session_state.dark_mode = not st.session_state.dark_mode
+    st.rerun()
+st.sidebar.markdown("---")
 
 x = st.sidebar.button("Yapan Kişi")
 if x:
