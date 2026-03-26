@@ -1,305 +1,155 @@
-import sqlite3
+# src/database.py
+import json
+from supabase import create_client, Client
+from src.backbone import SUPABASE_URL, SUPABASE_KEY
 from src.models import Describe
-from backbone import DATA_DIR, DATABASE_DIR
 
-class Library():
+class Library:
+    """Supabase‑tabanlı veri katmanı. SQLite yerine Supabase kullanır."""
 
     def __init__(self):
-        self.create_connect()
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            raise RuntimeError("Supabase URL / KEY tanımlı değil. .env dosyasını kontrol et.")
+        self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    def create_connect(self):
-        '''This function allows to create data'''
-        self.connect = sqlite3.connect(database=str(DATABASE_DIR))
-        self.cursor = self.connect.cursor()
+    # --------------------------------------------------------------
+    # CRUD – CREATE
+    # --------------------------------------------------------------
+    def add(self, customer: Describe):
+        """Yeni müşteri kaydını Supabase'e ekler."""
+        # Telefonu DB’ye kaydederken aynı formatı koruyoruz
+        phone = f"{customer.phone_number[:4]} {customer.phone_number[4:7]} " \
+                f"{customer.phone_number[7:9]} {customer.phone_number[9:]}"
+        data = {
+            "number":           customer.number,
+            "type":             customer.type,
+            "special":          customer.special,
+            "color_of_earring": customer.color_of_earring,
+            "color_of_animal":  customer.color_of_animal,
+            "whose":            customer.whose,
+            "from_whom":        customer.from_whom,
+            "price":            float(customer.price) if customer.price else 0,
+            "phone_number":     phone,
+            "payment_method":   getattr(customer, "payment_method", "")
+        }
+        resp = self.supabase.table("kurbanlık_hesap").insert(data).execute()
+        if resp.error:
+            raise RuntimeError(f"Supabase INSERT hatası: {resp.error.message}")
 
-        # Kanónik şema - kolon sırası: number, type, special, color_of_earring,
-        # color_of_animal, whose, from_whom, price, phone_number, payment_method
-        query = (
-            "CREATE TABLE IF NOT EXISTS kurbanlık_hesap ("
-            "number TEXT, type TEXT, special TEXT, color_of_earring TEXT,"
-            "color_of_animal TEXT, whose TEXT, from_whom TEXT,"
-            "price FLOAT, phone_number TEXT, payment_method TEXT)"
-        )
-        self.cursor.execute(query)
-
-        # Migration: eski veritabanlarında payment_method kolonu yoksa ekle
-        try:
-            self.cursor.execute(
-                "ALTER TABLE kurbanlık_hesap ADD COLUMN payment_method TEXT"
-            )
-        except sqlite3.OperationalError:
-            pass  # Kolon zaten var
-
-        self.connect.commit()
-
-    def interrupt_connection(self):
-        '''This function allows to stop to process'''
-        self.connect.close()
+    # --------------------------------------------------------------
+    # READ – SELECT
+    # --------------------------------------------------------------
+    def _fetch(self, query):
+        """Supabase response → Describe objeleri listesi."""
+        rows = query.data
+        return [Describe(**row) for row in rows]
 
     def exhibit_customer(self):
-        query = "SELECT * FROM kurbanlık_hesap"
-        self.cursor.execute(query)
-        accounts = self.cursor.fetchall()
+        """Tüm kayıtları getir."""
+        resp = self.supabase.table("kurbanlık_hesap").select("*").execute()
+        return self._fetch(resp)
 
-        if len(accounts) == 0:
-            return "Kaydedilen hiçbir veri yoktur."
-        else:
-            # result = ""
-            # for i in accounts:
-            #     account = Describe(i[0],i[1],i[2],i[3],i[4],i[5],i[6],i[7],i[8],i[9])
-            #     # The upper line is allows to show smoothly to data
-            #     result += str(account) + "\n"
-            return [Describe(*account) for account in accounts]
+    # Tek tek sorgular (numara, whose, vs.) ------------------------------------------------
+    def query_animal_number(self, number, return_objects=False):
+        resp = self.supabase.table("kurbanlık_hesap")\
+                .select("*").eq("number", number).execute()
+        if return_objects:
+            return self._fetch(resp)
+        return "\n".join(str(Describe(**r)) for r in resp.data)
 
-################################
-#    SORGULAMA ALANLARI
-################################
+    def query_animal_whose(self, whose, return_objects=False):
+        resp = self.supabase.table("kurbanlık_hesap")\
+                .select("*").eq("whose", whose).execute()
+        if return_objects:
+            return self._fetch(resp)
+        return "\n".join(str(Describe(**r)) for r in resp.data)
 
-    def query_animal_number(self,number, return_objects=False):
-        '''This function allows querying number information in data'''
-        query = "SELECT * FROM kurbanlık_hesap WHERE number=? "
-        self.cursor.execute(query,(number,))    # this line allows to query to according to number
+    def query_animal_whose_and_number(self, whose, number, return_objects=False):
+        resp = self.supabase.table("kurbanlık_hesap")\
+                .select("*").eq("whose", whose).eq("number", number).execute()
+        if return_objects:
+            return self._fetch(resp)
+        return "\n".join(str(Describe(**r)) for r in resp.data)
 
-        accounts = self.cursor.fetchall()
+    def query_animal_type(self, kind, return_objects=False):
+        resp = self.supabase.table("kurbanlık_hesap")\
+                .select("*").eq("type", kind).execute()
+        if return_objects:
+            return self._fetch(resp)
+        return "\n".join(str(Describe(**r)) for r in resp.data)
 
-        if len(accounts) == 0:
-            return "Böyle bir müşteri bulunmuyor"
-        else:
-            if return_objects:
-                return [Describe(*i) for i in accounts]
-            result = ""
-            for i in accounts:
-                account = Describe(i[0],i[1],i[2],i[3],i[4],i[5],i[6],i[7],i[8],i[9])
-                result += str(account) + "\n"
-            return result
+    def query_animal_phone_number(self, phone, return_objects=False):
+        resp = self.supabase.table("kurbanlık_hesap")\
+                .select("*").eq("phone_number", phone).execute()
+        if return_objects:
+            return self._fetch(resp)
+        return "\n".join(str(Describe(**r)) for r in resp.data)
 
-    def query_animal_whose(self,whose, return_objects=False):
-        '''This function allows querying whose information of animals in data'''
-        query = "SELECT * FROM kurbanlık_hesap WHERE LOWER(whose)=? COLLATE NOCASE"
+    # --------------------------------------------------------------
+    # UPDATE – PATCH
+    # --------------------------------------------------------------
+    def _update_field(self, pk, field, new_val):
+        resp = self.supabase.table("kurbanlık_hesap")\
+                .update({field: new_val})\
+                .eq("number", pk).execute()
+        if resp.error:
+            raise RuntimeError(f"Supabase UPDATE hatası: {resp.error.message}")
 
-        self.cursor.execute(query,(whose.lower(),))         # this line allows to query to according to whose
-
-        accounts = self.cursor.fetchall()
-
-        if(len(accounts) == 0):
-            return "Böyle bir müşteri bulunmuyor"
-        else:
-            if return_objects:
-                return [Describe(*i) for i in accounts]
-            result = ""
-            for i in accounts:
-                account = Describe(i[0], i[1], i[2], i[3], i[4], i[5], i[6], i[7],i[8],i[9])
-                result += str(account) + "\n"
-            return result
-
-    def query_animal_whose_and_number(self,whose,number, return_objects=False):
-        '''This function allows querying number and whose information of animals in data'''
-        query = "SELECT * FROM kurbanlık_hesap WHERE LOWER(whose)=? AND number = ? COLLATE NOCASE"
-
-        self.cursor.execute(query,(whose.lower(),number,))     # this line allows to query to according to whose and number
-
-        accounts = self.cursor.fetchall()
-
-        if(len(accounts) == 0):
-            return "Böyle bir kişi ve numara bulunmuyor"
-        else:
-            if return_objects:
-                return [Describe(*i) for i in accounts]
-            result = ""
-            for i in accounts:
-                account = Describe(i[0],i[1],i[2],i[3],i[4],i[5],i[6],i[7],i[8],i[9])
-                result += str(account) + "\n"
-            return result
-
-    def query_animal_type(self,type, return_objects=False):
-        '''This function allows querying type information of animals in data'''
-        query = "SELECT * FROM kurbanlık_hesap WHERE LOWER(type)=? COLLATE NOCASE"
-
-        self.cursor.execute(query,(type.lower(),))     # this line allows to query to according to type
-
-        accounts = self.cursor.fetchall()
-
-        if(len(accounts) == 0):
-            return "Böyle bir müşteri bulunmuyor"
-        else:
-            if return_objects:
-                return [Describe(*i) for i in accounts]
-            result = ""
-            for i in accounts:
-                account = Describe(i[0],i[1],i[2],i[3],i[4],i[5],i[6],i[7],i[8],i[9])
-                result += str(account) + "\n"
-            return result
-
-    def query_animal_phone_number(self,phone_number, return_objects=False):
-        '''This function allows querying phone_number information of animals in data'''
-        query = "SELECT * FROM kurbanlık_hesap WHERE LOWER(phone_number)=? COLLATE NOCASE"
-
-        self.cursor.execute(query,(phone_number,))      # this line allows to query to according to phone_number
-        accounts = self.cursor.fetchall()
-
-        if(len(accounts) == 0):
-            return "Böyle bir müşteri bulunmuyor"
-        else:
-            if return_objects:
-                return [Describe(*i) for i in accounts]
-            result = ""
-            for i in accounts:
-                account = Describe(i[0],i[1],i[2],i[3],i[4],i[5],i[6],i[7],i[8],i[9])
-                result += str(account) + "\n"
-            return result
-
-################################
-#       EKLEME ALANLARI
-################################
-    def add(self, customer):
-        '''This function allows adding new data to the data'''
-        # Kolon listesi açıkça belirtiliyor - şema değişse dahi güvenli
-        query = (
-            "INSERT INTO kurbanlık_hesap "
-            "(number, type, special, color_of_earring, color_of_animal, "
-            "whose, from_whom, price, phone_number, payment_method) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
-        new_phone_number = (
-            f"{customer.phone_number[:4]} {customer.phone_number[4:7]} "
-            f"{customer.phone_number[7:9]} {customer.phone_number[9:]}"
-        )
-        self.cursor.execute(query, (
-            customer.number, customer.type, customer.special,
-            customer.color_of_earring, customer.color_of_animal,
-            customer.whose, customer.from_whom, customer.price,
-            new_phone_number, customer.payment_method
-        ))
-        self.connect.commit()
-
-    def count_data(self):
-        '''This function is count the data'''
-        query = "SELECT * FROM kurbanlık_hesap"
-
-        self.cursor.execute(query)
-
-        accounts = self.cursor.fetchall()    # Makes us throw all the books in a tuple
-
-        return len(accounts)
-
-    def sum_price(self):
-        '''This function is sum all prices in the data'''
-        query = "SELECT * FROM kurbanlık_hesap"
-
-        self.cursor.execute(query)
-        accounts = self.cursor.fetchall()
-        summ = 0
-        for i in accounts:
-            # Geçmişteki hatalı kayıtlardan (boş veya harf içeren fiyatlar) dolayı çökmemesi için
-            try:
-                price_str = str(i[7]).replace(',', '.')
-                summ += float(price_str)
-            except (ValueError, TypeError):
-                continue
-        return summ
-
-################################
-#      GÜNCELLEME ALANLARI
-################################
-
-    def upgrade_data_number(self,number_to_update,new_number):
-        '''This function is allows us to update number data'''
-        update_query = "UPDATE kurbanlık_hesap SET number = ? WHERE number = ?"
-        self.cursor.execute(update_query, (new_number, number_to_update))    # this line allows to update
-        self.connect.commit()
+    def upgrade_data_number(self, number_to_update, new_number):
+        self._update_field(number_to_update, "number", new_number)
 
     def upgrade_data_type(self, number_to_update, new_kind):
-        '''This function is allows us to update type data'''
-        try:
-            update_query = "UPDATE kurbanlık_hesap SET type = ? WHERE number = ?"
-            self.cursor.execute(update_query, (new_kind, number_to_update))    # this line allows to update new_kind
-            self.connect.commit()
-            print("Veriler başarıyla güncellendi.")
-        except sqlite3.Error as e:
-            self.connect.rollback()  # undo process
-            print("Veri güncelleme hatası:", str(e))
+        self._update_field(number_to_update, "type", new_kind)
 
     def upgrade_data_feature(self, number_to_update, new_special):
-        '''This function is allows us to update special data'''
-        try:
-            update_query = "UPDATE kurbanlık_hesap SET special = ? WHERE number = ?"
-            self.cursor.execute(update_query, (new_special, number_to_update))
-            self.connect.commit()
-        except sqlite3.Error as e:
-            self.connect.rollback()
-            print("Veri güncelleme hatası:", str(e))
+        self._update_field(number_to_update, "special", new_special)
 
-    def upgrade_data_color_of_earring(self,number_to_update,new_color_of_earring):
-        '''This function is allows us to update color_of_earring data'''
-        update_query = "UPDATE kurbanlık_hesap SET color_of_earring = ? WHERE number = ?"
-        self.cursor.execute(update_query, (new_color_of_earring, number_to_update))     # this line allows to update new_color_of_earring
-        self.connect.commit()
+    def upgrade_data_color_of_earring(self, number_to_update, new_color):
+        self._update_field(number_to_update, "color_of_earring", new_color)
 
-    def upgrade_data_color_of_animal(self,number_to_update,new_color_of_animal):
-        '''This function is allows us to update color_of_animal data'''
-        update_query = "UPDATE kurbanlık_hesap SET color_of_animal = ? WHERE number = ?"
-        self.cursor.execute(update_query, (new_color_of_animal, number_to_update))    # this line allows to update new_color_of_animal
-        self.connect.commit()
+    def upgrade_data_color_of_animal(self, number_to_update, new_color):
+        self._update_field(number_to_update, "color_of_animal", new_color)
 
-    def upgrade_data_whose(self,number_to_update,new_whose):
-        '''This function is allows us to update whose data'''
-        update_query = "UPDATE kurbanlık_hesap SET whose = ? WHERE number = ?"
-        self.cursor.execute(update_query, (new_whose, number_to_update))       # this line allows to update new_whose
-        self.connect.commit()
+    def upgrade_data_whose(self, number_to_update, new_whose):
+        self._update_field(number_to_update, "whose", new_whose)
 
-    def upgrade_data_from_whom(self,number_to_update,new_from_whom):
-        '''This function is allows us to update from_whom data'''
-        update_query = "UPDATE kurbanlık_hesap SET from_whom = ? WHERE number = ?"
-        self.cursor.execute(update_query, (new_from_whom, number_to_update))    # this line allows to update new_from_whom
-        self.connect.commit()
+    def upgrade_data_from_whom(self, number_to_update, new_from):
+        self._update_field(number_to_update, "from_whom", new_from)
 
-    def upgrade_data_price(self,number_to_update,new_price):
-        '''This function is allows us to update price data'''
-        update_query = "UPDATE kurbanlık_hesap SET price = ? WHERE number = ?"
-        self.cursor.execute(update_query, (new_price, number_to_update))     # this line allows to update new_price
-        self.connect.commit()
+    def upgrade_data_price(self, number_to_update, new_price):
+        self._update_field(number_to_update, "price", float(new_price))
 
-    def upgrade_data_phone_number(self,number_to_update,new_phone_number):
-        '''This function is allows us to update phone_number data'''
-        update_query = "UPDATE kurbanlık_hesap SET phone_number = ? WHERE number = ?"
-        new_phone_number = f"{new_phone_number[:4]} {new_phone_number[4:7]} {new_phone_number[7:9]} {new_phone_number[9:]}"
-        self.cursor.execute(update_query, (new_phone_number, number_to_update))    # this line allows to update new_phone_number
-        self.connect.commit()
+    def upgrade_data_phone_number(self, number_to_update, new_phone):
+        # aynı formatlama (4‑3‑2‑2) uygulanır
+        formatted = f"{new_phone[:4]} {new_phone[4:7]} {new_phone[7:9]} {new_phone[9:]}"
+        self._update_field(number_to_update, "phone_number", formatted)
 
-    def upgrade_data_payment_method(self,number_to_update,new_payment_method):
-        '''This function is allows us to update payment_data data'''
-        update_query = "UPDATE kurbanlık_hesap SET payment_method = ? WHERE number = ?"
-        self.cursor.execute(update_query, (new_payment_method,number_to_update))    # this line allows to update new_payment_method
-        self.connect.commit()
+    def upgrade_data_payment_method(self, number_to_update, new_payment):
+        self._update_field(number_to_update, "payment_method", new_payment)
 
-
-################################
-#       SİLME ALANLARI
-################################
-
-
+    # --------------------------------------------------------------
+    # DELETE
+    # --------------------------------------------------------------
     def delete_data_from_ID(self, personelID):
-        delete_query = "DELETE FROM kurbanlık_hesap WHERE number = ?"
-        self.cursor.execute(delete_query, (personelID,))
-        self.connect.commit()
+        resp = self.supabase.table("kurbanlık_hesap")\
+                .delete().eq("number", personelID).execute()
+        if resp.error:
+            raise RuntimeError(f"Supabase DELETE hatası: {resp.error.message}")
 
+    # --------------------------------------------------------------
+    # İSTATİSTİKLER
+    # --------------------------------------------------------------
+    def count_data(self):
+        resp = self.supabase.table("kurbanlık_hesap").select("number", count="exact").execute()
+        return resp.count  # PostgreSQL‑den gelen toplam satır sayısı
 
-################################
-#   Bütün (ALL) İşlemleri ALANLARI
-################################
-
-
-
-    def get_select_all_from_ID(self):
-        select_query = "SELECT * FROM kurbanlık_hesap"
-        self.cursor.execute(select_query)
-        return self.cursor.fetchall()
-
-
-
-
-
-
-
-
-
+    def sum_price(self):
+        """Toplam alacak (price) değerini döndürür."""
+        resp = self.supabase.table("kurbanlık_hesap").select("price").execute()
+        total = 0.0
+        for row in resp.data:
+            try:
+                total += float(row["price"])
+            except (TypeError, ValueError):
+                continue
+        return total

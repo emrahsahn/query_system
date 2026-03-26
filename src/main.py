@@ -9,7 +9,7 @@ def main():
     Streamlit uygulamasını başlatır.
     """
     # Python yorumlayıcısı ile `streamlit run app.py` komutunu çalıştırıyoruz
-    script_path = os.path.join(os.path.dirname(__file__), "..", "ui", "ui_deneme.py")
+    script_path = os.path.join(os.path.dirname(__file__), "..", "ui", "ui.py")
     script_path = os.path.abspath(script_path)
     cmd = [
         sys.executable,  # mevcut python yürütücüsü

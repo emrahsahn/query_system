@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .idea/
 .vscode/
+.env
 
 # Veritabanını yedeklemeden pushluyorsan burayı açabilirsin:
 # *.db
