@@ -1,11 +1,32 @@
-.venv/
-venv/
-__pycache__/
-*.pyc
+# IDE
 .idea/
 .vscode/
 
-# Veritabanını yedeklemeden pushluyorsan burayı açabilirsin:
-# *.db
-# *.sqlite
-# *.sqlite3
+# OS
+.DS_Store
+Thumbs.db
+
+# Root env/secrets
+.env
+data/database/.env
+
+# Python cache (legacy)
+__pycache__/
+*.pyc
+
+# Node / Next.js (web app)
+web/node_modules/
+web/.next/
+web/out/
+web/build/
+web/.vercel/
+web/.env.local
+web/.env*.local
+web/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript build info
+web/*.tsbuildinfo

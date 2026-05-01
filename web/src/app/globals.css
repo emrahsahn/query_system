@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #f5f7fa;
+  --foreground: #1a1a2e;
+  --card: #ffffff;
+  --card-foreground: #1a1a2e;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a2e;
+  --primary: #5352ed;
+  --primary-foreground: #ffffff;
+  --secondary: #e8edf5;
+  --secondary-foreground: #1a1a2e;
+  --muted: #eef2ff;
+  --muted-foreground: #616161;
+  --accent: #eef2ff;
+  --accent-foreground: #1a1a2e;
+  --destructive: #c62828;
+  --destructive-foreground: #ffffff;
+  --border: #c5cae9;
+  --input: #c5cae9;
+  --ring: #5352ed;
+  --radius: 0.75rem;
+  --sidebar: #e8edf5;
+  --sidebar-foreground: #1a1a2e;
+  --sidebar-border: #c5cae9;
+  --green: #2e7d32;
+  --gold: #e65100;
+  --red: #c62828;
+}
+
+.dark {
+  --background: #0f0f1a;
+  --foreground: #e8eaf6;
+  --card: #1e1e2f;
+  --card-foreground: #e8eaf6;
+  --popover: #1e1e2f;
+  --popover-foreground: #e8eaf6;
+  --primary: #5352ed;
+  --primary-foreground: #ffffff;
+  --secondary: #14142b;
+  --secondary-foreground: #e8eaf6;
+  --muted: #14142b;
+  --muted-foreground: #a0a0c0;
+  --accent: #2a2a42;
+  --accent-foreground: #e8eaf6;
+  --destructive: #ff4757;
+  --destructive-foreground: #ffffff;
+  --border: #3c3c5a;
+  --input: #3c3c5a;
+  --ring: #5352ed;
+  --sidebar: #14142b;
+  --sidebar-foreground: #e8eaf6;
+  --sidebar-border: #3c3c5a;
+  --green: #7bed9f;
+  --gold: #ffa502;
+  --red: #ff4757;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-green: var(--green);
+  --color-gold: var(--gold);
+  --color-red: var(--red);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  overscroll-behavior: contain;
+}
+
+/* ── Animasyon keyframe'leri ────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes zoomIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes zoomOut {
+  from { transform: scale(1);    opacity: 1; }
+  to   { transform: scale(0.95); opacity: 0; }
+}
+@keyframes slideIn {
+  from { transform: translateY(-4px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@layer utilities {
+  .animate-in  { animation: fadeIn 0.15s ease; }
+  .fade-in-0   { animation: fadeIn 0.15s ease; }
+  .zoom-in-95  { animation: zoomIn 0.15s ease; }
+  .animate-out { animation: fadeOut 0.1s ease; }
+  .fade-out-0  { animation: fadeOut 0.1s ease; }
+  .zoom-out-95 { animation: zoomOut 0.1s ease; }
+
+  /* iOS notch / safe-area destegi */
+  .safe-top    { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-left   { padding-left: env(safe-area-inset-left); }
+  .safe-right  { padding-right: env(safe-area-inset-right); }
+}
