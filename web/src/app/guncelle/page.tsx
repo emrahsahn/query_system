@@ -2,15 +2,18 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { searchByNumber } from "@/lib/supabase/queries";
-import { updateCustomerField } from "@/actions/customers";
+import { applyPartialPayment, updateCustomerField } from "@/actions/customers";
 import type { Customer } from "@/lib/types";
-import { PAYMENT_OPTIONS } from "@/lib/types";
+import { PAYMENT_OPTIONS, GROUP_CATEGORIES } from "@/lib/types";
 import { CustomerCard } from "@/components/customer-card";
+import { CustomerHistoryPanel } from "@/components/customer-history-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle2, Search } from "lucide-react";
+import { formatPrice } from "@/lib/utils";
+import { formatMoneyInputTR, formatPhoneInputTR, parseMoneyTR } from "@/lib/input-format";
 
 const UPDATE_FIELDS = [
   { value: "number", label: "Numara" },
@@ -18,12 +21,15 @@ const UPDATE_FIELDS = [
   { value: "special", label: "Özellik" },
   { value: "color_of_earring", label: "Küpe Rengi" },
   { value: "color_of_animal", label: "Hayvan Rengi" },
+  { value: "spray_paint_color", label: "Sıkılan Boya" },
   { value: "whose", label: "Sahip" },
   { value: "from_whom", label: "Kimden" },
   { value: "price", label: "Fiyat (TL)" },
   { value: "phone_number", label: "Telefon Numarası" },
   { value: "payment_method", label: "Ödeme Yöntemi" },
   { value: "payment_status", label: "Ödeme Durumu" },
+  { value: "group_category", label: "Grup Kategorisi" },
+  { value: "address", label: "Adres" },
 ];
 
 export default function GuncelledPage() {
@@ -33,19 +39,35 @@ export default function GuncelledPage() {
   const [field, setField] = useState("type");
   const [newValue, setNewValue] = useState("");
   const [payStatus, setPayStatus] = useState("Belirsiz");
+  const [groupCat, setGroupCat] = useState("");
+  const [paidAmount, setPaidAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+
+  function syncFormFromCustomer(c: Customer | null) {
+    if (!c) {
+      setPayStatus("Belirsiz");
+      setGroupCat("");
+      return;
+    }
+    setPayStatus(c.payment_status);
+    setGroupCat(c.group_category ?? "");
+  }
 
   async function handleSearch() {
     if (!searchNum.trim()) return;
     setSearching(true);
     setError("");
     setPreview(null);
+    syncFormFromCustomer(null);
     const supabase = createClient();
     try {
       const res = await searchByNumber(supabase, searchNum.trim());
-      setPreview(res[0] ?? null);
+      const next = res[0] ?? null;
+      setPreview(next);
+      syncFormFromCustomer(next);
       if (!res[0]) setError(`#${searchNum} numaralı kayıt bulunamadı.`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Hata oluştu.");
@@ -59,32 +81,66 @@ export default function GuncelledPage() {
     setError("");
     setSubmitting(true);
 
-    const value = field === "payment_status" ? payStatus : newValue.trim();
-    if (!value) { setError("Yeni değer boş olamaz."); setSubmitting(false); return; }
-
-    if (field === "number" && !/^\d+$/.test(value)) {
-      setError("Numara yalnızca rakamlardan oluşmalıdır."); setSubmitting(false); return;
-    }
-    if (field === "price" && isNaN(Number(value.replace(",", ".")))) {
-      setError("Geçerli bir fiyat girin."); setSubmitting(false); return;
-    }
-    if (field === "phone_number") {
-      const clean = value.replace(/[\s\-]/g, "");
-      const norm = clean.length === 10 && !clean.startsWith("0") ? "0" + clean : clean;
-      if (!/^\d{11}$/.test(norm)) {
-        setError("Geçerli bir telefon girin. Örn: 0532 123 45 67"); setSubmitting(false); return;
-      }
-    }
-
     try {
+      if (field === "payment_status" && payStatus === "Kısmi Ödeme") {
+        if (!paidAmount.trim()) {
+          setError("Kısmi ödeme için ödenen tutarı girin.");
+          return;
+        }
+        const result = await applyPartialPayment(preview.number, paidAmount);
+        if (result?.error) {
+          setError(result.error);
+          return;
+        }
+        setSuccess(true);
+        setPaidAmount("");
+        const supabase = createClient();
+        const res = await searchByNumber(supabase, preview.number);
+        const next = res[0] ?? null;
+        setPreview(next);
+        syncFormFromCustomer(next);
+        setHistoryRefresh((k) => k + 1);
+        setTimeout(() => setSuccess(false), 2000);
+        return;
+      }
+
+      const value = field === "payment_status" ? payStatus
+        : field === "group_category" ? (groupCat === "__none__" ? "" : groupCat)
+        : newValue.trim();
+      if (!value && field !== "group_category") {
+        setError("Yeni değer boş olamaz.");
+        return;
+      }
+
+      if (field === "number" && !/^\d+$/.test(value)) {
+        setError("Numara yalnızca rakamlardan oluşmalıdır.");
+        return;
+      }
+      if (field === "price" && !Number.isFinite(parseMoneyTR(value))) {
+        setError("Geçerli bir fiyat girin.");
+        return;
+      }
+      if (field === "phone_number") {
+        const clean = value.replace(/[\s\-]/g, "");
+        const norm = clean.length === 10 && !clean.startsWith("0") ? "0" + clean : clean;
+        if (!/^\d{11}$/.test(norm)) {
+          setError("Geçerli bir telefon girin. Örn: 0532 123 45 67");
+          return;
+        }
+      }
+
       const result = await updateCustomerField(preview.number, field, value);
-      if (result?.error) { setError(result.error); } else {
+      if (result?.error) {
+        setError(result.error);
+      } else {
         setSuccess(true);
         setNewValue("");
-        // Güncellenen kartı yenile
         const supabase = createClient();
         const res = await searchByNumber(supabase, field === "number" ? value : preview.number);
-        setPreview(res[0] ?? null);
+        const next = res[0] ?? null;
+        setPreview(next);
+        syncFormFromCustomer(next);
+        setHistoryRefresh((k) => k + 1);
         setTimeout(() => setSuccess(false), 2000);
       }
     } catch (e: unknown) {
@@ -98,9 +154,9 @@ export default function GuncelledPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-foreground text-center">🔄 Müşteri Bilgisi Güncelle</h1>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        {/* Sol panel - arama + güncelleme */}
-        <div className="rounded-xl border border-border bg-card p-4 md:p-6 shadow-sm space-y-5">
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        {/* Sol panel - arama + güncelleme (yükseklik sağ panele bağlı büyümesin) */}
+        <div className="rounded-xl border border-border bg-card p-4 md:p-6 shadow-sm space-y-5 h-fit w-full min-w-0 self-start">
           <h2 className="font-semibold text-foreground">🎯 İşlem Detayları</h2>
 
           {/* Kayıt ara */}
@@ -122,7 +178,7 @@ export default function GuncelledPage() {
           {/* Alan seçimi */}
           <div className="space-y-2">
             <Label>Güncellenecek Alan</Label>
-            <Select value={field} onValueChange={(v) => { setField(v); setNewValue(""); }}>
+            <Select value={field} onValueChange={(v) => { setField(v); setNewValue(""); setPaidAmount(""); }}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -136,19 +192,68 @@ export default function GuncelledPage() {
           <div className="space-y-2">
             <Label>✏️ Yeni Değer</Label>
             {field === "payment_status" ? (
-              <Select value={payStatus} onValueChange={setPayStatus}>
+              <div className="space-y-3">
+                <Select
+                  value={payStatus}
+                  onValueChange={(v) => {
+                    setPayStatus(v);
+                    if (v !== "Kısmi Ödeme") setPaidAmount("");
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {payStatus === "Kısmi Ödeme" && preview && (
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">
+                      Mevcut kalan tutar (fiyat):{" "}
+                      <span className="font-semibold text-foreground">
+                        {formatPrice(Number(preview.price ?? 0))} ₺
+                      </span>
+                    </p>
+                    <Label htmlFor="paid-partial">Ödenen miktar (TL)</Label>
+                    <Input
+                      id="paid-partial"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      value={paidAmount}
+                      onChange={(e) => setPaidAmount(formatMoneyInputTR(e.target.value))}
+                      placeholder="Örn: 5.000,50"
+                    />
+                  </div>
+                )}
+              </div>
+            ) : field === "group_category" ? (
+              <Select value={groupCat || "__none__"} onValueChange={setGroupCat}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Grup Seçin" />
                 </SelectTrigger>
                 <SelectContent>
-                  {PAYMENT_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  <SelectItem value="__none__">— Grup Seçilmedi —</SelectItem>
+                  {GROUP_CATEGORIES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                 </SelectContent>
               </Select>
             ) : (
               <Input
                 value={newValue}
-                onChange={(e) => setNewValue(e.target.value)}
-                placeholder={field === "price" ? "Örn: 15400.50" : field === "phone_number" ? "Örn: 0532 123 45 67" : "Yeni değer"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (field === "price") setNewValue(formatMoneyInputTR(v));
+                  else if (field === "phone_number") setNewValue(formatPhoneInputTR(v));
+                  else setNewValue(v);
+                }}
+                inputMode={field === "price" ? "decimal" : field === "phone_number" ? "tel" : undefined}
+                placeholder={
+                  field === "price"
+                    ? "Örn: 15.400,50"
+                    : field === "phone_number"
+                      ? "Örn: 0532 123 45 67"
+                      : "Yeni değer"
+                }
               />
             )}
           </div>
@@ -167,10 +272,17 @@ export default function GuncelledPage() {
         </div>
 
         {/* Sağ panel - mevcut kayıt önizleme */}
-        <div className="space-y-2">
+        <div className="space-y-4 min-w-0">
           <h2 className="font-semibold text-foreground">👁️ Mevcut Kayıt</h2>
           {preview ? (
-            <CustomerCard customer={preview} />
+            <>
+              <CustomerCard customer={preview} />
+              <CustomerHistoryPanel
+                key={`${preview.number}-${historyRefresh}`}
+                hayvanNumber={preview.number}
+                currentCustomer={preview}
+              />
+            </>
           ) : (
             <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
               Numarayı arayarak kaydı görüntüleyin.

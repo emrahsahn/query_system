@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseMoneyTR } from "@/lib/input-format";
 
 const phoneSchema = z
   .string()
@@ -23,14 +24,24 @@ export const customerSchema = z.object({
   price: z
     .string()
     .optional()
-    .transform((v) => (v ?? "").replace(",", "."))
-    .refine((v) => v === "" || !isNaN(Number(v)), { message: "Geçerli bir fiyat girin." })
-    .transform((v) => (v === "" ? "0" : v)),
+    .transform((v) => (v ?? "").trim())
+    .refine(
+      (v) => v === "" || Number.isFinite(parseMoneyTR(v)),
+      { message: "Geçerli bir fiyat girin." }
+    )
+    .transform((v) => {
+      if (!v || v === "") return "0";
+      const n = parseMoneyTR(v);
+      return Number.isFinite(n) ? String(n) : "0";
+    }),
   phone_number: phoneSchema,
   payment_method: z.string().optional().default(""),
   payment_status: z
     .enum(["Belirsiz", "Ödendi", "Kısmi Ödeme", "Ödenmedi"])
     .default("Belirsiz"),
+  group_category: z.string().optional().default(""),
+  address: z.string().optional().default(""),
+  spray_paint_color: z.string().optional().default(""),
 });
 
 export type CustomerFormValues = z.input<typeof customerSchema>;

@@ -60,13 +60,22 @@ Not: Ornek dosya olarak `web/.env.local.example` bulunur.
 
 ## Veritabani Kurulumu
 
-Migration dosyalarini Supabase'e uygulayin:
+Migration dosyalarini degistirip uzak projeye yeniden `db push` edecekseniz, once CLI'nin
+tuttugu kayitlari temizleyin (yoksa eski migration ozetiyle cakisma olur):
+
+```sql
+-- Supabase SQL Editor veya psql; dosya: supabase/clear_migration_history.sql
+DELETE FROM supabase_migrations.schema_migrations;
+```
+
+Ardindan migration dosyalarini Supabase'e uygulayin:
 
 ```bash
 supabase db push
 ```
 
-veya Supabase SQL Editor ile `supabase/migrations` altindaki SQL dosyalarini calistirin.
+veya SQL Editor ile `supabase/migrations` altindaki SQL dosyalarini **sirayla** calistirin.
+Test verisini yuklemek icin: `supabase/seed.sql`
 
 RLS acik oldugu icin policy migration'larinin da uygulanmis oldugundan emin olun.
 
