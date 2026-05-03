@@ -1,32 +1,54 @@
-# IDE
+# IDE & editors
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Root env/secrets
+# Secrets & local env (keep .env.example committed)
 .env
 data/database/.env
+web/.env
+web/.env.local
+web/.env.development.local
+web/.env.test.local
+web/.env.production.local
 
-# Python cache (legacy)
+# Python (legacy)
 __pycache__/
 *.pyc
+.Python
 
-# Node / Next.js (web app)
+# Next.js app (web/)
 web/node_modules/
 web/.next/
 web/out/
 web/build/
 web/.vercel/
-web/.env.local
-web/.env*.local
+web/.turbo/
+web/coverage/
+web/*.tsbuildinfo
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/pnpm-debug.log*
 web/*.log
+
+# Supabase CLI (local state)
+supabase/.temp/
+supabase/.branches/
+
+# Root-level package manager logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# TypeScript build info
-web/*.tsbuildinfo
+# Local debug / agent logs
+debug-*.log

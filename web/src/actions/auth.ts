@@ -1,9 +1,11 @@
 "use server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-
-const SESSION_COOKIE = "ks_session";
-const SESSION_VALUE = process.env.SESSION_SECRET ?? "kurbanlik-session-secret-2026";
+import {
+  SESSION_COOKIE,
+  getSessionCookieValue,
+  getSessionMaxAgeSeconds,
+} from "@/lib/session-config";
 
 export async function login(_state: unknown, formData: FormData) {
   const username = formData.get("username") as string;
@@ -17,11 +19,11 @@ export async function login(_state: unknown, formData: FormData) {
   }
 
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, SESSION_VALUE, {
+  cookieStore.set(SESSION_COOKIE, getSessionCookieValue(), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7, // 7 gün
+    maxAge: getSessionMaxAgeSeconds(),
     path: "/",
   });
 
@@ -37,5 +39,5 @@ export async function logout() {
 export async function getSession() {
   const cookieStore = await cookies();
   const val = cookieStore.get(SESSION_COOKIE)?.value;
-  return val === SESSION_VALUE;
+  return val === getSessionCookieValue();
 }

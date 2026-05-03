@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-
-const SESSION_COOKIE = "ks_session";
-const SESSION_VALUE = process.env.SESSION_SECRET ?? "kurbanlik-session-secret-2026";
+import { SESSION_COOKIE, getSessionCookieValue } from "@/lib/session-config";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -18,7 +16,7 @@ export function proxy(request: NextRequest) {
 
   const session = request.cookies.get(SESSION_COOKIE)?.value;
 
-  if (session !== SESSION_VALUE) {
+  if (session !== getSessionCookieValue()) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
