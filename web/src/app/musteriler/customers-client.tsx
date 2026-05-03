@@ -1,15 +1,18 @@
 "use client";
 import { useState, useMemo } from "react";
 import type { Customer } from "@/lib/types";
+import { GROUP_CATEGORIES } from "@/lib/types";
 import { CustomerCard } from "@/components/customer-card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, ChevronDown, ChevronUp, LayoutGrid, Layers } from "lucide-react";
+import { compareHayvanNumarasi, formatPrice } from "@/lib/utils";
 
 const PAGE_SIZE = 12;
 
 type SortField = "default" | "number" | "price" | "type" | "whose" | "from_whom";
 type SortDir = "asc" | "desc";
+type ViewMode = "all" | "grouped";
 
 function sortCustomers(list: Customer[], field: SortField, dir: SortDir): Customer[] {
   if (field === "default") return dir === "desc" ? [...list].reverse() : list;
@@ -17,8 +20,8 @@ function sortCustomers(list: Customer[], field: SortField, dir: SortDir): Custom
   return [...list].sort((a, b) => {
     let av: string | number, bv: string | number;
     if (field === "number") {
-      av = Number(a.number) || 0;
-      bv = Number(b.number) || 0;
+      const cmp = compareHayvanNumarasi(a.number, b.number);
+      return dir === "asc" ? cmp : -cmp;
     } else if (field === "price") {
       av = Number(a.price) || 0;
       bv = Number(b.price) || 0;
@@ -34,22 +37,120 @@ function sortCustomers(list: Customer[], field: SortField, dir: SortDir): Custom
 
 function toCSV(customers: Customer[]): string {
   const headers = [
-    "Numara","Cins","Özellik","Küpe Rengi","Hayvan Rengi","Sahip","Kimden",
-    "Fiyat (TL)","Telefon","Ödeme Detayı","Ödeme Durumu",
+    "Numara","Cins","Özellik","Küpe Rengi","Hayvan Rengi","Sıkılan Boya","Sahip","Kimden",
+    "Fiyat (TL)","Telefon","Ödeme Detayı","Ödeme Durumu","Grup Kategorisi","Adres",
   ];
   const rows = customers.map((c) => [
-    c.number, c.type, c.special, c.color_of_earring, c.color_of_animal,
+    c.number, c.type, c.special, c.color_of_earring, c.color_of_animal, c.spray_paint_color,
     c.whose, c.from_whom, c.price, c.phone_number, c.payment_method, c.payment_status,
+    c.group_category, c.address,
   ].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","));
   return "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
 }
 
+function downloadCSV(customers: Customer[], filename: string) {
+  const blob = new Blob([toCSV(customers)], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface Props { initialCustomers: Customer[] }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Gruplu görünüm — tek bir grup paneli
+// ────────────────────────────────────────────────────────────────────────────
+function GroupPanel({
+  groupName,
+  customers,
+  icon,
+}: {
+  groupName: string;
+  customers: Customer[];
+  icon: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const total = customers.reduce((s, c) => s + Number(c.price ?? 0), 0);
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      {/* Başlık satırı */}
+      <div
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors text-left cursor-pointer"
+      >
+        <span className="text-lg">{icon}</span>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm text-foreground truncate">{groupName}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {customers.length} hayvan &nbsp;·&nbsp;{" "}
+            <span className="text-gold font-semibold">{formatPrice(total)} ₺</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              const safeName = groupName.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ0-9\s]/g, "").trim();
+              downloadCSV(customers, `${safeName}.csv`);
+            }}
+            className="h-7 px-2 text-xs"
+            disabled={customers.length === 0}
+          >
+            <Download className="h-3 w-3 mr-1" />
+            CSV
+          </Button>
+          {open ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </div>
+      </div>
+
+      {/* Açılan kartlar */}
+      {open && (
+        <div className="border-t border-border p-4">
+          {customers.length === 0 ? (
+            <p className="text-center text-muted-foreground py-6 text-sm">Bu grupta kayıt bulunmuyor.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {customers.map((c) => (
+                <CustomerCard key={c.number} customer={c} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const GROUP_ICONS: Record<string, string> = {
+  "1.Gün Kesilecek Küçük Mallar": "🔪",
+  "1.Gün Kesilecek Büyük Mallar": "🔪",
+  "2.Gün Kesilecek Küçük Mallar": "✂️",
+  "2.Gün Kesilecek Büyük Mallar": "✂️",
+  "Pazardan Kendi Alacaklar": "🛒",
+  "Köyden Kendi Alacaklar": "🏘️",
+  "Çarşıya Dağıtılacaklar": "🏪",
+  "Köye Dağıtılacaklar": "🚚",
+  "Kesilip Dükkana Gönderilecekler": "🏬",
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Ana bileşen
+// ────────────────────────────────────────────────────────────────────────────
 export function CustomersClient({ initialCustomers }: Props) {
   const [sortField, setSortField] = useState<SortField>("default");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState<ViewMode>("all");
 
   const sorted = useMemo(
     () => sortCustomers(initialCustomers, sortField, sortDir),
@@ -68,83 +169,152 @@ export function CustomersClient({ initialCustomers }: Props) {
     setPage(1);
   }
 
-  function downloadCSV() {
-    const blob = new Blob([toCSV(sorted)], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "musteriler.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  // Grup bazlı gruplama
+  const grouped = useMemo(() => {
+    const map: Record<string, Customer[]> = {};
+    for (const g of GROUP_CATEGORIES) map[g] = [];
+    map["__grupsuz__"] = [];
+    for (const c of sorted) {
+      const key = c.group_category && GROUP_CATEGORIES.includes(c.group_category as typeof GROUP_CATEGORIES[number])
+        ? c.group_category
+        : "__grupsuz__";
+      map[key].push(c);
+    }
+    return map;
+  }, [sorted]);
+
+  const grupsuzList = grouped["__grupsuz__"] ?? [];
 
   return (
     <div className="space-y-4">
       {/* Kontroller */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
-        <div className="flex gap-2 flex-1">
-          <Select value={sortField} onValueChange={handleSortField}>
-            <SelectTrigger className="flex-1 sm:flex-none sm:w-48">
-              <SelectValue placeholder="Sıralama ölçütü" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">Varsayılan</SelectItem>
-              <SelectItem value="number">Numara</SelectItem>
-              <SelectItem value="price">Fiyat</SelectItem>
-              <SelectItem value="type">Cins</SelectItem>
-              <SelectItem value="whose">Kime Ait</SelectItem>
-              <SelectItem value="from_whom">Kimden Alındı</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={sortDir} onValueChange={handleSortDir}>
-            <SelectTrigger className="w-28 sm:w-36 shrink-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="asc">Artan ↑</SelectItem>
-              <SelectItem value="desc">Azalan ↓</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Görünüm modu toggle */}
+        <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode("all")}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
+              viewMode === "all"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Tümü
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("grouped")}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-border ${
+              viewMode === "grouped"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Gruplara Göre
+          </button>
         </div>
 
-        <Button variant="outline" size="sm" onClick={downloadCSV} className="w-full sm:w-auto sm:ml-auto">
+        {/* Sıralama (sadece "Tümü" modunda) */}
+        {viewMode === "all" && (
+          <div className="flex gap-2 flex-1">
+            <Select value={sortField} onValueChange={handleSortField}>
+              <SelectTrigger className="flex-1 sm:flex-none sm:w-48">
+                <SelectValue placeholder="Sıralama ölçütü" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Varsayılan</SelectItem>
+                <SelectItem value="number">Numara</SelectItem>
+                <SelectItem value="price">Fiyat</SelectItem>
+                <SelectItem value="type">Cins</SelectItem>
+                <SelectItem value="whose">Kime Ait</SelectItem>
+                <SelectItem value="from_whom">Kimden Alındı</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={sortDir} onValueChange={handleSortDir}>
+              <SelectTrigger className="w-28 sm:w-36 shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="asc">Artan ↑</SelectItem>
+                <SelectItem value="desc">Azalan ↓</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Tüm CSV indirme */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => downloadCSV(sorted, "musteriler.csv")}
+          className="w-full sm:w-auto sm:ml-auto"
+        >
           <Download className="h-4 w-4 mr-2" />
-          CSV İndir
+          Tümünü CSV İndir
         </Button>
       </div>
 
-      {/* Kartlar */}
-      {paginated.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12">Kayıtlı müşteri bulunamadı.</p>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {paginated.map((c) => (
-            <CustomerCard key={c.number} customer={c} />
-          ))}
-        </div>
+      {/* ── TÜMÜ görünümü ── */}
+      {viewMode === "all" && (
+        <>
+          {paginated.length === 0 ? (
+            <p className="text-center text-muted-foreground py-12">Kayıtlı müşteri bulunamadı.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {paginated.map((c) => (
+                <CustomerCard key={c.number} customer={c} />
+              ))}
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <Button
+                variant="outline" size="icon"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Sayfa {page} / {totalPages}
+              </span>
+              <Button
+                variant="outline" size="icon"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Sayfalama */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pt-2">
-          <Button
-            variant="outline" size="icon"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Sayfa {page} / {totalPages}
-          </span>
-          <Button
-            variant="outline" size="icon"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+      {/* ── GRUPLU görünüm ── */}
+      {viewMode === "grouped" && (
+        <div className="space-y-3">
+          {GROUP_CATEGORIES.map((group) => (
+            <GroupPanel
+              key={group}
+              groupName={group}
+              customers={grouped[group] ?? []}
+              icon={GROUP_ICONS[group] ?? "📂"}
+            />
+          ))}
+
+          {/* Grupsuz kayıtlar */}
+          {grupsuzList.length > 0 && (
+            <GroupPanel
+              groupName="Grupsuz Kayıtlar"
+              customers={grupsuzList}
+              icon="❓"
+            />
+          )}
         </div>
       )}
     </div>

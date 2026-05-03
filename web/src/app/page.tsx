@@ -19,7 +19,7 @@ const quickLinks = [
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  let stats = { count: 0, total: 0, unpaidTotal: 0, unpaidCount: 0 };
+  let stats = { count: 0, total: 0, unpaidTotal: 0, unpaidCount: 0, collectedTotal: 0 };
   try {
     stats = await getStats(supabase);
   } catch {}
@@ -43,15 +43,15 @@ export default async function DashboardPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-4 sm:p-5 text-center shadow-sm">
           <p className="text-xl sm:text-3xl font-extrabold text-gold break-all">{formatPrice(stats.total)} ₺</p>
-          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">💰 Toplam Alacak</p>
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">💰 Anlaşılan Toplam (Beklenen)</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4 sm:p-5 text-center shadow-sm">
-          <p className="text-xl sm:text-3xl font-extrabold text-red break-all">{formatPrice(stats.unpaidTotal)} ₺</p>
-          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">⏳ Ödenmemiş Tutar</p>
+          <p className="text-xl sm:text-3xl font-extrabold text-green break-all">{formatPrice(stats.collectedTotal)} ₺</p>
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">✅ Tahsil Edilen Tutar</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4 sm:p-5 text-center shadow-sm">
           <p className="text-2xl sm:text-3xl font-extrabold text-red">{stats.unpaidCount}</p>
-          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">❗ Bekleyen Kayıt</p>
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">❗ Bekleyen Ödeme</p>
         </div>
       </div>
 

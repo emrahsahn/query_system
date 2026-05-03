@@ -75,74 +75,90 @@ export default function SorgulaPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">🔍 Müşteri Sorgulama</h1>
+      <h1 className="text-2xl font-bold text-foreground text-center">🔍 Müşteri Sorgulama</h1>
 
-      <div className="rounded-xl border border-border bg-card p-4 md:p-6 shadow-sm">
-        <form onSubmit={handleSearch} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Sorgulama Yöntemi</Label>
-            <Select value={qType} onValueChange={(v) => { setQType(v as QueryType); setResults(null); }}>
-              <SelectTrigger className="w-full sm:w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {queryOptions.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="grid gap-x-6 gap-y-4 lg:grid-cols-2 lg:items-start">
+        <h2 className="font-semibold text-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 lg:col-start-1 lg:row-start-1">
+          <span>📋 Sorgu Formu</span>
+        </h2>
+        <h2 className="font-semibold text-foreground lg:col-start-2 lg:row-start-1">
+          📋 Sorgu Sonuçları
+        </h2>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {(qType === "numara" || qType === "numara_sahip") && (
-              <div className="space-y-2">
-                <Label htmlFor="num">🔢 Hayvan Numarası</Label>
-                <Input id="num" value={num} onChange={(e) => setNum(e.target.value)} placeholder="Örn: 101" />
-              </div>
-            )}
-            {(qType === "sahip" || qType === "numara_sahip") && (
-              <div className="space-y-2">
-                <Label htmlFor="owner">👤 Sahip İsmi (kısmi arama)</Label>
-                <Input id="owner" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Sahip adı" />
-              </div>
-            )}
-            {qType === "tur" && (
-              <div className="space-y-2">
-                <Label htmlFor="kind">🐑 Hayvan Türü / Cinsi (kısmi arama)</Label>
-                <Input id="kind" value={kind} onChange={(e) => setKind(e.target.value)} placeholder="Örn: Koç" />
-              </div>
-            )}
-            {qType === "telefon" && (
-              <div className="space-y-2">
-                <Label htmlFor="phone">📞 Telefon Numarası</Label>
-                <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Örn: 0532 123 45 67" />
-              </div>
-            )}
-          </div>
-
-          {error && <p className="text-sm font-medium text-destructive">{error}</p>}
-
-          <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-            <Search className="h-4 w-4 mr-2" />
-            {loading ? "Aranıyor..." : "Sistemi Sorgula"}
-          </Button>
-        </form>
-      </div>
-
-      {results !== null && (
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            <strong>{results.length}</strong> kayıt bulundu.
-          </p>
-          {results.length === 0 ? (
-            <p className="text-center text-muted-foreground py-10">Eşleşen kayıt bulunamadı.</p>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {results.map((c) => <CustomerCard key={c.number} customer={c} />)}
+        <div className="rounded-xl border border-border bg-card p-4 md:p-6 shadow-sm space-y-5 h-fit w-full min-w-0 self-start lg:col-start-1 lg:row-start-2">
+          <form onSubmit={handleSearch} className="space-y-4">
+            <div className="space-y-2">
+              <h2 className="font-semibold text-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 lg:col-start-1 lg:row-start-1" aria-hidden>🎯 Sorgu Detayları </h2>
+              <Label>Sorgulama Yöntemi</Label>
+              <Select value={qType} onValueChange={(v) => { setQType(v as QueryType); setResults(null); }}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {queryOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            <div className="space-y-4">
+              {(qType === "numara" || qType === "numara_sahip") && (
+                <div className="space-y-2">
+                  <Label htmlFor="num">🔢 Hayvan Numarası</Label>
+                  <Input id="num" value={num} onChange={(e) => setNum(e.target.value)} placeholder="Örn: 101" />
+                </div>
+              )}
+              {(qType === "sahip" || qType === "numara_sahip") && (
+                <div className="space-y-2">
+                  <Label htmlFor="owner">👤 Sahip İsmi (kısmi arama)</Label>
+                  <Input id="owner" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Sahip adı" />
+                </div>
+              )}
+              {qType === "tur" && (
+                <div className="space-y-2">
+                  <Label htmlFor="kind">🐑 Hayvan Türü / Cinsi (kısmi arama)</Label>
+                  <Input id="kind" value={kind} onChange={(e) => setKind(e.target.value)} placeholder="Örn: Koç" />
+                </div>
+              )}
+              {qType === "telefon" && (
+                <div className="space-y-2">
+                  <Label htmlFor="phone">📞 Telefon Numarası</Label>
+                  <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Örn: 0532 123 45 67" />
+                </div>
+              )}
+            </div>
+
+            {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+
+            <Button type="submit" disabled={loading} className="w-full">
+              <Search className="h-4 w-4 mr-2" />
+              {loading ? "Aranıyor..." : "Sistemi Sorgula"}
+            </Button>
+          </form>
+        </div>
+
+        <div className="space-y-4 min-w-0 lg:col-start-2 lg:row-start-2">
+          {results === null ? (
+            <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
+              Sorguyu çalıştırarak sonuçları burada görüntüleyin.
+            </div>
+          ) : results.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
+              Eşleşen kayıt bulunamadı.
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                <strong>{results.length}</strong> kayıt bulundu.
+              </p>
+              <div className="space-y-4">
+                {results.map((c) => <CustomerCard key={c.number} customer={c} />)}
+              </div>
+            </>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
