@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { searchByNumber } from "@/lib/supabase/queries";
 import { applyPartialPayment, updateCustomerField } from "@/actions/customers";
@@ -9,6 +9,7 @@ import { CustomerCard } from "@/components/customer-card";
 import { CustomerHistoryPanel } from "@/components/customer-history-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle2, Search } from "lucide-react";
@@ -30,6 +31,7 @@ const UPDATE_FIELDS = [
   { value: "payment_status", label: "Ödeme Durumu" },
   { value: "group_category", label: "Grup Kategorisi" },
   { value: "address", label: "Adres" },
+  { value: "note", label: "Not" },
 ];
 
 export default function GuncelledPage() {
@@ -55,6 +57,12 @@ export default function GuncelledPage() {
     setPayStatus(c.payment_status);
     setGroupCat(c.group_category ?? "");
   }
+
+  useEffect(() => {
+    if (!preview) return;
+    if (field === "note") setNewValue(preview.note ?? "");
+    else if (field === "address") setNewValue(preview.address ?? "");
+  }, [preview, field]);
 
   async function handleSearch() {
     if (!searchNum.trim()) return;
@@ -107,7 +115,8 @@ export default function GuncelledPage() {
       const value = field === "payment_status" ? payStatus
         : field === "group_category" ? (groupCat === "__none__" ? "" : groupCat)
         : newValue.trim();
-      if (!value && field !== "group_category") {
+      const allowEmpty = field === "group_category" || field === "note" || field === "address";
+      if (!value && !allowEmpty) {
         setError("Yeni değer boş olamaz.");
         return;
       }
@@ -178,7 +187,18 @@ export default function GuncelledPage() {
           {/* Alan seçimi */}
           <div className="space-y-2">
             <Label>Güncellenecek Alan</Label>
-            <Select value={field} onValueChange={(v) => { setField(v); setNewValue(""); setPaidAmount(""); }}>
+            <Select
+              value={field}
+              onValueChange={(v) => {
+                setField(v);
+                setPaidAmount("");
+                if (preview && (v === "note" || v === "address")) {
+                  setNewValue(v === "note" ? (preview.note ?? "") : (preview.address ?? ""));
+                } else {
+                  setNewValue("");
+                }
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -237,6 +257,15 @@ export default function GuncelledPage() {
                   {GROUP_CATEGORIES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                 </SelectContent>
               </Select>
+            ) : field === "note" || field === "address" ? (
+              <Textarea
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                placeholder={field === "address" ? "Adres" : "Not (en fazla 2000 karakter)"}
+                rows={5}
+                maxLength={field === "note" ? 2000 : undefined}
+                className="resize-y min-h-[100px]"
+              />
             ) : (
               <Input
                 value={newValue}

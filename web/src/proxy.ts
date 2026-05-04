@@ -5,11 +5,12 @@ import { SESSION_COOKIE, getSessionCookieValue } from "@/lib/session-config";
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Login sayfası ve statik dosyalar serbest
+  // Login sayfası, public statikler ve bundler çıktısı serbest
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon")
+    pathname.startsWith("/favicon") ||
+    /\.(?:ico|png|jpe?g|svg|webp|gif|woff2?|txt)$/i.test(pathname)
   ) {
     return NextResponse.next();
   }

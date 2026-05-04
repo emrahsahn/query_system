@@ -11,24 +11,34 @@ import {
 } from "react";
 
 type Theme = "light" | "dark";
+type VisualStyle = "premium" | "modern";
 
-const STORAGE_KEY = "theme";
+const STORAGE_KEY_THEME = "theme";
+const STORAGE_KEY_STYLE = "visual-style";
 
 type ThemeContextValue = {
   theme: Theme;
   setTheme: (t: Theme) => void;
+  visualStyle: VisualStyle;
+  setVisualStyle: (s: VisualStyle) => void;
   resolvedTheme: Theme;
 };
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-function applyDomTheme(theme: Theme) {
-  document.documentElement.classList.toggle("dark", theme === "dark");
+function applyDomTheme(theme: Theme, style: VisualStyle) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  root.classList.toggle("dark", theme === "dark");
+  
+  // Clear style classes
+  root.classList.remove("theme-premium", "theme-modern");
+  root.classList.add(`theme-${style}`);
 }
 
 function readStoredTheme(): Theme {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY_THEME);
     if (stored === "light" || stored === "dark") return stored;
   } catch {
     /* ignore */
@@ -36,63 +46,84 @@ function readStoredTheme(): Theme {
   return "dark";
 }
 
-const themeListeners = new Set<() => void>();
+function readStoredStyle(): VisualStyle {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_STYLE);
+    if (stored === "premium" || stored === "modern") return stored;
+  } catch {
+    /* ignore */
+  }
+  return "premium";
+}
 
-function subscribeTheme(onStoreChange: () => void) {
-  themeListeners.add(onStoreChange);
+const listeners = new Set<() => void>();
+
+function subscribe(onStoreChange: () => void) {
+  listeners.add(onStoreChange);
   const onStorage = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY || e.key === null) onStoreChange();
+    if (e.key === STORAGE_KEY_THEME || e.key === STORAGE_KEY_STYLE || e.key === null) {
+      onStoreChange();
+    }
   };
   if (typeof window !== "undefined") {
     window.addEventListener("storage", onStorage);
   }
   return () => {
-    themeListeners.delete(onStoreChange);
+    listeners.delete(onStoreChange);
     if (typeof window !== "undefined") {
       window.removeEventListener("storage", onStorage);
     }
   };
 }
 
-function emitThemeChange() {
-  themeListeners.forEach((l) => l());
-}
-
-function getThemeSnapshot(): Theme {
-  return readStoredTheme();
-}
-
-function getServerThemeSnapshot(): Theme {
-  return "dark";
+function emitChange() {
+  listeners.forEach((l) => l());
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const theme = useSyncExternalStore(
-    subscribeTheme,
-    getThemeSnapshot,
-    getServerThemeSnapshot
+    subscribe,
+    readStoredTheme,
+    () => "dark" as Theme
+  );
+
+  const visualStyle = useSyncExternalStore(
+    subscribe,
+    readStoredStyle,
+    () => "premium" as VisualStyle
   );
 
   useEffect(() => {
-    applyDomTheme(theme);
-  }, [theme]);
+    applyDomTheme(theme, visualStyle);
+  }, [theme, visualStyle]);
 
   const setTheme = useCallback((next: Theme) => {
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      localStorage.setItem(STORAGE_KEY_THEME, next);
     } catch {
       /* ignore */
     }
-    emitThemeChange();
+    emitChange();
+  }, []);
+
+  const setVisualStyle = useCallback((next: VisualStyle) => {
+    try {
+      localStorage.setItem(STORAGE_KEY_STYLE, next);
+    } catch {
+      /* ignore */
+    }
+    emitChange();
   }, []);
 
   const value = useMemo(
     () => ({
       theme,
       setTheme,
+      visualStyle,
+      setVisualStyle,
       resolvedTheme: theme,
     }),
-    [theme, setTheme]
+    [theme, setTheme, visualStyle, setVisualStyle]
   );
 
   return (
@@ -100,21 +131,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** next-themes uyumlu: theme bazen undefined (provider yoksa). */
-export function useTheme(): {
-  theme?: Theme;
-  setTheme: (t: string) => void;
-  resolvedTheme?: Theme;
-} {
+export function useTheme() {
   const ctx = useContext(ThemeContext);
   if (!ctx) {
-    return { theme: undefined, setTheme: () => {}, resolvedTheme: undefined };
+    return {
+      theme: undefined as Theme | undefined,
+      setTheme: (t: string) => {},
+      visualStyle: undefined as VisualStyle | undefined,
+      setVisualStyle: (s: VisualStyle) => {},
+      resolvedTheme: undefined as Theme | undefined,
+    };
   }
-  return {
-    theme: ctx.theme,
-    setTheme: (t: string) => {
-      if (t === "light" || t === "dark") ctx.setTheme(t);
-    },
-    resolvedTheme: ctx.resolvedTheme,
-  };
+  return ctx;
 }

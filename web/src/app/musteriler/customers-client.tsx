@@ -38,12 +38,12 @@ function sortCustomers(list: Customer[], field: SortField, dir: SortDir): Custom
 function toCSV(customers: Customer[]): string {
   const headers = [
     "Numara","Cins","Özellik","Küpe Rengi","Hayvan Rengi","Sıkılan Boya","Sahip","Kimden",
-    "Fiyat (TL)","Telefon","Ödeme Detayı","Ödeme Durumu","Grup Kategorisi","Adres",
+    "Fiyat (TL)","Telefon","Ödeme Detayı","Ödeme Durumu","Grup Kategorisi","Adres","Not",
   ];
   const rows = customers.map((c) => [
     c.number, c.type, c.special, c.color_of_earring, c.color_of_animal, c.spray_paint_color,
     c.whose, c.from_whom, c.price, c.phone_number, c.payment_method, c.payment_status,
-    c.group_category, c.address,
+    c.group_category, c.address, c.note ?? "",
   ].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","));
   return "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
 }

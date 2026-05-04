@@ -7,6 +7,7 @@ import {
 } from "@/lib/supabase/queries";
 import type { Customer } from "@/lib/types";
 import { CustomerCard } from "@/components/customer-card";
+import { CustomerHistoryPanel } from "@/components/customer-history-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -152,8 +153,13 @@ export default function SorgulaPage() {
               <p className="text-sm text-muted-foreground">
                 <strong>{results.length}</strong> kayıt bulundu.
               </p>
-              <div className="space-y-4">
-                {results.map((c) => <CustomerCard key={c.number} customer={c} />)}
+              <div className="space-y-6">
+                {results.map((c) => (
+                  <div key={c.number} className="space-y-3">
+                    <CustomerCard customer={c} />
+                    <CustomerHistoryPanel hayvanNumber={c.number} currentCustomer={c} />
+                  </div>
+                ))}
               </div>
             </>
           )}

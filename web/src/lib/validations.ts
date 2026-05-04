@@ -42,6 +42,7 @@ export const customerSchema = z.object({
   group_category: z.string().optional().default(""),
   address: z.string().optional().default(""),
   spray_paint_color: z.string().optional().default(""),
+  note: z.string().max(2000).optional().default(""),
 });
 
 export type CustomerFormValues = z.input<typeof customerSchema>;

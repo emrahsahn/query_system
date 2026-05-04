@@ -12,7 +12,7 @@ const quickLinks = [
   { href: "/sorgula", label: "Müşteri Sorgula", icon: Search, color: "text-blue-400" },
   { href: "/ekle", label: "Müşteri Ekle", icon: Plus, color: "text-green" },
   { href: "/istatistikler", label: "İstatistikler", icon: BarChart2, color: "text-gold" },
-  { href: "/guncelle", label: "Müşteri Güncelle", icon: RefreshCw, color: "text-purple-400" },
+//  { href: "/guncelle", label: "Müşteri Güncelle", icon: RefreshCw, color: "text-purple-400" },
   { href: "/sil", label: "Müşteri Sil", icon: Trash2, color: "text-red" },
 ];
 
@@ -55,15 +55,20 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Hızlı menü */}
+      {/* Hızlı menü — sütun sayısı ve karo genişliği viewport'a göre esner */}
       <div>
         <h3 className="mb-4 text-lg font-semibold text-foreground">Hızlı Erişim</h3>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-6">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr))]">
           {quickLinks.map(({ href, label, icon: Icon, color }) => (
-            <Button key={href} variant="outline" asChild className="h-auto flex-col gap-2 py-5">
-              <Link href={href}>
-                <Icon className={`h-6 w-6 ${color}`} />
-                <span className="text-xs font-medium text-center leading-tight">{label}</span>
+            <Button
+              key={href}
+              variant="outline"
+              asChild
+              className="h-auto w-full min-h-[5.25rem] flex-col justify-center gap-2 py-4 px-3 sm:min-h-0 sm:py-5"
+            >
+              <Link href={href} className="flex flex-col items-center gap-2">
+                <Icon className={`h-6 w-6 shrink-0 ${color}`} />
+                <span className="text-center text-xs font-medium leading-tight sm:text-sm">{label}</span>
               </Link>
             </Button>
           ))}
