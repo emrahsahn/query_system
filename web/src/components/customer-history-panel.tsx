@@ -37,6 +37,7 @@ const SNAPSHOT_FIELDS: { key: keyof CustomerSnapshot; label: string }[] = [
   { key: "payment_status", label: "Ödeme durumu" },
   { key: "group_category", label: "Grup kategorisi" },
   { key: "address", label: "Adres" },
+  { key: "note", label: "Not" },
 ];
 
 function customerToSnapshot(c: Customer): CustomerSnapshot {
@@ -56,6 +57,7 @@ function customerToSnapshot(c: Customer): CustomerSnapshot {
     group_category: c.group_category,
     address: c.address,
     spray_paint_color: c.spray_paint_color,
+    note: c.note,
   };
 }
 

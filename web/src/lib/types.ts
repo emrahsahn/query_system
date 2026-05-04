@@ -17,6 +17,8 @@ export interface Customer {
   group_category: string;
   address: string;
   spray_paint_color: string;
+  /** Boş string veya migrasyon öncesi kayıtlarda eksik olabilir. */
+  note?: string | null;
 }
 
 export const PAYMENT_OPTIONS: PaymentStatus[] = [
@@ -63,6 +65,7 @@ export interface CustomerSnapshot {
   group_category?: string | null;
   address?: string | null;
   spray_paint_color?: string | null;
+  note?: string | null;
 }
 
 export interface HistoryEntry {

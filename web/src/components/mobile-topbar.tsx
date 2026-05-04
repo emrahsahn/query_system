@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
+import Image from "next/image";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NavSidebar } from "@/components/nav-sidebar";
 
@@ -25,7 +26,13 @@ export function MobileTopbar() {
         </Sheet>
 
         <div className="flex items-center gap-2">
-          <span className="text-lg">🐐</span>
+          <Image
+            src="/logo.jpeg"
+            alt="Kurbanlık Takip Sistemi"
+            width={28}
+            height={28}
+            className="h-7 w-7 shrink-0 object-contain"
+          />
           <span className="text-sm font-bold text-sidebar-foreground">Kurbanlık Takip</span>
         </div>
 

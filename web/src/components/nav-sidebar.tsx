@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -15,9 +16,9 @@ const navItems = [
   { href: "/sorgula", label: "Müşteri Sorgula", icon: Search },
   { href: "/ekle", label: "Müşteri Ekle", icon: Plus },
   { href: "/istatistikler", label: "İstatistikler", icon: BarChart2 },
-  { href: "/guncelle", label: "Müşteri Güncelle", icon: RefreshCw },
   { href: "/sil", label: "Müşteri Sil", icon: Trash2 },
 ];
+//{ href: "/guncelle", label: "Müşteri Güncelle", icon: RefreshCw },
 
 interface NavSidebarProps {
   className?: string;
@@ -36,10 +37,16 @@ export function NavSidebar({ className, onNavClick }: NavSidebarProps) {
     >
       {/* Logo / Başlık */}
       <div className="flex items-center gap-3 px-6 py-5 shrink-0">
-        <span className="text-2xl">🐐</span>
+        <Image
+          src="/logo.jpeg"
+          alt="Kurbanlık Takip Sistemi"
+          width={40}
+          height={40}
+          className="h-10 w-10 shrink-0 object-contain"
+          priority
+        />
         <div>
-          <h1 className="text-base font-bold leading-tight">Kurbanlık Takip</h1>
-          <p className="text-xs text-muted-foreground">Sistemi</p>
+          <h1 className="text-base font-bold leading-tight">Kurbanlık Takip Sistemi</h1>
         </div>
       </div>
 

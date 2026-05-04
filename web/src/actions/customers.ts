@@ -46,6 +46,7 @@ export async function addCustomer(formData: unknown) {
     group_category: data.group_category,
     address: data.address,
     spray_paint_color: data.spray_paint_color,
+    note: data.note,
   };
 
   let { error } = await supabase.from(TABLE).insert(row);
@@ -67,7 +68,7 @@ const TL = new Intl.NumberFormat("tr-TR", {
   maximumFractionDigits: 2,
 });
 
-export async function applyPartialPayment(numberKey: string, paidAmountRaw: string) {
+export async function applyPartialPayment(numberKey: string, paidAmountRaw: string, manualNote?: string) {
   const paidRaw = parseMoneyTR(String(paidAmountRaw).trim());
   const paid = Math.round(paidRaw * 100) / 100;
   if (!Number.isFinite(paid) || paid <= 0) {
@@ -126,7 +127,10 @@ export async function applyPartialPayment(numberKey: string, paidAmountRaw: stri
   const remaining = Math.round((currentPrice - paid) * 100) / 100;
   const paidFmt = TL.format(paid);
   const remainingFmt = TL.format(Math.max(0, remaining));
-  const paymentMethod = `${paidFmt} ₺ ödendi; kalan borç ${remainingFmt} ₺`;
+  const autoNote = `${paidFmt} ₺ ödendi; kalan borç ${remainingFmt} ₺`;
+  
+  // Combine manual note and auto note
+  const paymentMethod = manualNote ? `${manualNote.trim()} | ${autoNote}` : autoNote;
 
   const payment_status =
     remaining <= 0 ? ("Ödendi" as const) : ("Kısmi Ödeme" as const);
@@ -144,6 +148,22 @@ export async function applyPartialPayment(numberKey: string, paidAmountRaw: stri
     const { agreed_total: _a, ...withoutAgreed } = patch;
     ({ error } = await supabase.from(TABLE).update(withoutAgreed).eq("number", numberKey));
   }
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/musteriler");
+  revalidatePath("/guncelle");
+  revalidatePath("/istatistikler");
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function updateCustomerFields(
+  number: string,
+  updates: Record<string, any>
+) {
+  const supabase = await createClient();
+  const { error } = await supabase.from(TABLE).update(updates).eq("number", number);
 
   if (error) return { error: error.message };
 

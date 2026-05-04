@@ -8,6 +8,7 @@ import { addCustomer } from "@/actions/customers";
 import { PAYMENT_OPTIONS, GROUP_CATEGORIES } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle2 } from "lucide-react";
@@ -177,6 +178,19 @@ export default function EklePage() {
                 <Input id="address" placeholder="Açık adres giriniz..." {...register("address")} />
               </div>
             )}
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="note">📝 Not</Label>
+              <Textarea
+                id="note"
+                placeholder="Önemli notlarınızı buraya yazabilirsiniz..."
+                rows={4}
+                maxLength={2000}
+                className="resize-y min-h-[88px]"
+                {...register("note")}
+              />
+              {errors.note && <p className="text-xs text-destructive">{errors.note.message}</p>}
+            </div>
           </div>
 
           <Button type="submit" className="w-full mt-2" disabled={isSubmitting}>
