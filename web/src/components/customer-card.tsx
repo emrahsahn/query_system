@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { Customer, PaymentStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/utils";
@@ -18,7 +18,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateCustomerField, applyPartialPayment, updateCustomerFields } from "@/actions/customers";
 import { PAYMENT_OPTIONS, GROUP_CATEGORIES } from "@/lib/types";
-import { formatMoneyInputTR, formatPhoneInputTR, parseMoneyTR } from "@/lib/input-format";
+import { formatMoneyInputTR, formatPhoneInputTR, parseMoneyTR, phoneToTelHref } from "@/lib/input-format";
 
 function paymentBadge(status: PaymentStatus) {
   const map: Record<PaymentStatus, "odendi" | "kismi" | "odenmedi" | "belirsiz"> = {
@@ -173,16 +173,30 @@ function CustomerCardInner({ c, onFieldClick, onPrintClick, isPreview }: Custome
             ["👤 Sahip", "whose", c.whose],
             ["📦 Kimden", "from_whom", c.from_whom],
             ["📞 Telefon", "phone_number", c.phone_number],
-          ].map(([label, key, val]) => (
+          ].map(([label, key, val]) => {
+            const str = val || "";
+            const tel = key === "phone_number" ? phoneToTelHref(str) : null;
+            return (
             <div
               key={key}
               className={`flex justify-between gap-2 border-b border-dashed border-border pb-1 last:border-0 ${onFieldClick ? "cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800/50 rounded px-1 -mx-1" : ""}`}
-              onClick={() => onFieldClick?.(label, key, val || "")}
+              onClick={() => onFieldClick?.(label, key, str)}
             >
               <span className="text-green font-semibold shrink-0">{label}</span>
-              <span className="text-muted-foreground text-right truncate">{val || "—"}</span>
+              {tel && str ? (
+                <a
+                  href={tel}
+                  className="text-primary text-right truncate underline-offset-2 hover:underline min-w-0 font-medium"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {str}
+                </a>
+              ) : (
+                <span className="text-muted-foreground text-right truncate">{str || "—"}</span>
+              )}
             </div>
-          ))}
+            );
+          })}
 
           {/* Payment Notes */}
           <div
@@ -245,7 +259,8 @@ function CustomerCardInner({ c, onFieldClick, onPrintClick, isPreview }: Custome
 
         <div
           className={`rounded-lg bg-accent px-3 py-2 text-right font-extrabold text-gold text-base sm:text-lg shrink-0 ${onFieldClick ? "cursor-pointer hover:opacity-80" : ""}`}
-          onClick={() => onFieldClick?.("💰 Fiyat", "price", String(c.price || 0))}
+          onClick={() => onFieldClick?.("Ödeme", "payment_method", c.payment_method || "")}
+          title="Ödeme notu ve ödeme durumu"
         >
           💰 {formatPrice(Number(c.price))} ₺
         </div>

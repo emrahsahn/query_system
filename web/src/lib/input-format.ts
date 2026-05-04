@@ -71,3 +71,16 @@ export function formatPhoneInputTR(raw: string): string {
   if (d.length <= 9) return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}`;
   return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9)}`;
 }
+
+/**
+ * Mobilde arama için `tel:` URI. Türkiye: 0 ile 11 hane, 10 hane veya +90 ile 12 hane.
+ * Geçersiz veya eksik ise `null`.
+ */
+export function phoneToTelHref(raw: string | null | undefined): string | null {
+  const d = String(raw ?? "").replace(/\D/g, "");
+  if (!d) return null;
+  if (d.startsWith("90") && d.length === 12) return `tel:+${d}`;
+  if (d.startsWith("0") && d.length === 11) return `tel:+90${d.slice(1)}`;
+  if (d.length === 10) return `tel:+90${d}`;
+  return null;
+}

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getCustomerHistory } from "@/lib/supabase/queries";
 import type { Customer, CustomerSnapshot, HistoryEntry } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
+import { phoneToTelHref } from "@/lib/input-format";
 import {
   Dialog,
   DialogContent,
@@ -75,6 +76,23 @@ function formatField(key: keyof CustomerSnapshot, v: unknown): string {
     return `${formatPrice(n)} ₺`;
   }
   return String(v);
+}
+
+function SnapshotPhoneCell({
+  fieldKey,
+  display,
+}: {
+  fieldKey: keyof CustomerSnapshot;
+  display: string;
+}) {
+  if (fieldKey !== "phone_number" || display === "—") return display;
+  const href = phoneToTelHref(display);
+  if (!href) return display;
+  return (
+    <a href={href} className="text-primary underline-offset-2 hover:underline font-medium">
+      {display}
+    </a>
+  );
 }
 
 /** Zaman artan sırada: snapshot(j) bu olaydan önce; bir sonraki hal = snapshot(j+1) veya güncel kayıt. */
@@ -293,10 +311,10 @@ export function CustomerHistoryPanel({
                         <tr key={c.key} className="border-b border-border/60 last:border-0">
                           <td className="p-2 align-top text-muted-foreground">{c.label}</td>
                           <td className="p-2 align-top text-destructive/90 break-words">
-                            {c.before}
+                            <SnapshotPhoneCell fieldKey={c.key} display={c.before} />
                           </td>
                           <td className="p-2 align-top text-green-600 dark:text-green-400 break-words">
-                            {c.after}
+                            <SnapshotPhoneCell fieldKey={c.key} display={c.after} />
                           </td>
                         </tr>
                       ))}
@@ -322,7 +340,10 @@ export function CustomerHistoryPanel({
                           {label}
                         </td>
                         <td className="p-2.5 align-top break-words">
-                          {formatField(key, activeRow?.snapshot[key])}
+                          <SnapshotPhoneCell
+                            fieldKey={key}
+                            display={formatField(key, activeRow?.snapshot[key])}
+                          />
                         </td>
                       </tr>
                     ))}
