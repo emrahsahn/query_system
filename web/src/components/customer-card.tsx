@@ -39,7 +39,15 @@ function buildAutoRows(currentAuto: string, historyRows: string[]) {
     seen.add(line);
     rows.push(line);
   }
-  return rows;
+  const extractRemainingDebt = (line: string) => {
+    const match = line.match(/kalan borç\s+(.+?)\s*₺/i);
+    if (!match?.[1]) return Number.POSITIVE_INFINITY;
+    const amount = parseMoneyTR(match[1]);
+    return Number.isFinite(amount) ? amount : Number.POSITIVE_INFINITY;
+  };
+
+  // Kartta aşağı doğru gidildikçe kalan borç büyüsün.
+  return rows.sort((a, b) => extractRemainingDebt(a) - extractRemainingDebt(b));
 }
 
 function paymentBadge(status: PaymentStatus) {
