@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Customer, PaymentStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/utils";
@@ -19,6 +19,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { updateCustomerField, applyPartialPayment, updateCustomerFields } from "@/actions/customers";
 import { PAYMENT_OPTIONS, GROUP_CATEGORIES } from "@/lib/types";
 import { formatMoneyInputTR, formatPhoneInputTR, parseMoneyTR, phoneToTelHref } from "@/lib/input-format";
+
+function splitPaymentMethod(value: string | null | undefined) {
+  const raw = value || "";
+  const separatorIdx = raw.indexOf(" | ");
+  if (separatorIdx === -1) return { manualNote: raw, autoNote: "" };
+  return {
+    manualNote: raw.slice(0, separatorIdx),
+    autoNote: raw.slice(separatorIdx + 3),
+  };
+}
+
+function buildAutoRows(currentAuto: string, historyRows: string[]) {
+  const seen = new Set<string>();
+  const rows: string[] = [];
+  for (const row of [currentAuto, ...historyRows]) {
+    const line = row.trim();
+    if (!line || seen.has(line)) continue;
+    seen.add(line);
+    rows.push(line);
+  }
+  return rows;
+}
 
 function paymentBadge(status: PaymentStatus) {
   const map: Record<PaymentStatus, "odendi" | "kismi" | "odenmedi" | "belirsiz"> = {
@@ -122,11 +144,12 @@ interface CustomerCardInnerProps {
   onFieldClick?: (label: string, key: string, value: string) => void;
   onPrintClick?: () => void;
   isPreview?: boolean;
+  autoHistoryRows?: string[];
 }
 
-function CustomerCardInner({ c, onFieldClick, onPrintClick, isPreview }: CustomerCardInnerProps) {
-  // Split payment_method by " | " to get manual note and automation note
-  const [manualNote, autoNote] = (c.payment_method || "").split(" | ");
+function CustomerCardInner({ c, onFieldClick, onPrintClick, isPreview, autoHistoryRows = [] }: CustomerCardInnerProps) {
+  const { manualNote, autoNote } = splitPaymentMethod(c.payment_method);
+  const autoRows = buildAutoRows(autoNote, autoHistoryRows);
 
   const CardContent = (
     <div className={`flex flex-col justify-between rounded-xl border border-border bg-card p-4 sm:p-5 shadow-sm transition-all duration-300 ${!isPreview ? "hover:-translate-y-1 hover:shadow-lg hover:border-primary" : ""}`}>
@@ -204,16 +227,24 @@ function CustomerCardInner({ c, onFieldClick, onPrintClick, isPreview }: Custome
             onClick={() => onFieldClick?.("Ödeme", "payment_method", c.payment_method || "")}
           >
             <span className="text-green font-semibold shrink-0">💳 Ödeme Notu</span>
-            <span className="text-muted-foreground text-right truncate">{manualNote || "—"}</span>
+            <span className="text-muted-foreground text-right min-w-0 flex-1 break-words whitespace-pre-wrap">
+              {manualNote || "—"}
+            </span>
           </div>
           
-          {autoNote && (
+          {autoRows.length > 0 && (
             <div
               className={`flex justify-between gap-2 border-b border-dashed border-border pb-1 ${onFieldClick ? "cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800/50 rounded px-1 -mx-1" : ""}`}
               onClick={() => onFieldClick?.("Ödeme", "payment_method", c.payment_method || "")}
             >
               <span className="text-green font-semibold shrink-0 text-[11px] opacity-80 italic">💳 Bakiye Detayı</span>
-              <span className="text-muted-foreground text-right truncate text-[11px] italic">{autoNote}</span>
+              <span className="text-muted-foreground text-right min-w-0 flex-1 break-words whitespace-pre-wrap text-[11px] italic">
+                {autoRows.map((row, index) => (
+                  <span key={`${row}-${index}`} className="block">
+                    {row}
+                  </span>
+                ))}
+              </span>
             </div>
           )}
 
@@ -288,6 +319,38 @@ export function CustomerCard({ customer }: CustomerCardProps) {
   const [paidAmount, setPaidAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [autoHistoryRows, setAutoHistoryRows] = useState<string[]>([]);
+  const autoHistoryStorageKey = useMemo(() => `payment-auto-history:${customer.number}`, [customer.number]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(autoHistoryStorageKey);
+      if (!stored) {
+        setAutoHistoryRows([]);
+        return;
+      }
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) {
+        setAutoHistoryRows([]);
+        return;
+      }
+      setAutoHistoryRows(parsed.filter((item): item is string => typeof item === "string"));
+    } catch {
+      setAutoHistoryRows([]);
+    }
+  }, [autoHistoryStorageKey]);
+
+  useEffect(() => {
+    try {
+      if (autoHistoryRows.length === 0) {
+        window.localStorage.removeItem(autoHistoryStorageKey);
+        return;
+      }
+      window.localStorage.setItem(autoHistoryStorageKey, JSON.stringify(autoHistoryRows));
+    } catch {
+      // localStorage erişim hataları UI akışını bozmamalı
+    }
+  }, [autoHistoryRows, autoHistoryStorageKey]);
 
   const handlePrint = () => {
     printReceipt(customer, printTitle);
@@ -297,8 +360,8 @@ export function CustomerCard({ customer }: CustomerCardProps) {
   const handleFieldClick = (label: string, key: string, value: string) => {
     if (key === "payment_method" || key === "payment_status") {
       setEditField({ label: "Ödeme Bilgileri", key: "payment_combined", value: customer.payment_method });
-      const [manual] = (customer.payment_method || "").split(" | ");
-      setManualNote(manual || "");
+      const { manualNote: existingManualNote } = splitPaymentMethod(customer.payment_method);
+      setManualNote(existingManualNote || "");
       setEditValue(customer.payment_status);
       setPaidAmount("");
     } else {
@@ -325,7 +388,13 @@ export function CustomerCard({ customer }: CustomerCardProps) {
           }
           const result = await applyPartialPayment(customer.number, paidAmount, manualNote);
           if (result?.error) setError(result.error);
-          else setEditOpen(false);
+          else {
+            const { autoNote: previousAutoNote } = splitPaymentMethod(customer.payment_method);
+            if (previousAutoNote.trim()) {
+              setAutoHistoryRows((prev) => [...prev, previousAutoNote.trim()]);
+            }
+            setEditOpen(false);
+          }
         } else {
           // Non-partial case: update status and manual note
           const result = await updateCustomerFields(customer.number, {
@@ -405,6 +474,7 @@ export function CustomerCard({ customer }: CustomerCardProps) {
         c={customer}
         onFieldClick={handleFieldClick}
         onPrintClick={() => setPrintOpen(true)}
+        autoHistoryRows={autoHistoryRows}
       />
 
       {/* Fiş Yazdır Dialog */}
@@ -508,10 +578,18 @@ export function CustomerCard({ customer }: CustomerCardProps) {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>💳 Ödeme Notu (Manuel)</Label>
-                      <Input
+                      <Textarea
                         value={manualNote}
                         onChange={(e) => setManualNote(e.target.value)}
                         placeholder="Örn: Nakit alındı, yarın ödenecek..."
+                        maxLength={4000}
+                        className="min-h-[40px] resize-none overflow-hidden"
+                        rows={1}
+                        onInput={(e) => {
+                          const target = e.currentTarget;
+                          target.style.height = "auto";
+                          target.style.height = `${target.scrollHeight}px`;
+                        }}
                       />
                     </div>
                     
@@ -564,8 +642,14 @@ export function CustomerCard({ customer }: CustomerCardProps) {
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         placeholder={editField?.key === "address" ? "Adres" : "Not"}
-                        rows={5}
-                        maxLength={editField?.key === "note" ? 2000 : undefined}
+                        rows={1}
+                        maxLength={editField?.key === "note" ? 4000 : undefined}
+                        className="min-h-[40px] resize-none overflow-hidden"
+                        onInput={(e) => {
+                          const target = e.currentTarget;
+                          target.style.height = "auto";
+                          target.style.height = `${target.scrollHeight}px`;
+                        }}
                       />
                     ) : (
                       <Input
@@ -597,7 +681,7 @@ export function CustomerCard({ customer }: CustomerCardProps) {
             {/* Preview */}
             <div className="flex-1 bg-neutral-100 dark:bg-neutral-900/50 p-4 rounded-xl border border-border flex items-center justify-center">
               <div className="w-full pointer-events-none">
-                <CustomerCardInner c={previewCustomer} isPreview />
+                <CustomerCardInner c={previewCustomer} isPreview autoHistoryRows={autoHistoryRows} />
               </div>
             </div>
           </div>
