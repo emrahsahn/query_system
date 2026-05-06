@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { searchByNumber } from "@/lib/supabase/queries";
-import { applyPartialPayment, updateCustomerField } from "@/actions/customers";
+import { applyPartialPayment, updateCustomerField, updateCustomerFields } from "@/actions/customers";
 import type { Customer } from "@/lib/types";
 import { PAYMENT_OPTIONS, GROUP_CATEGORIES } from "@/lib/types";
 import { CustomerCard } from "@/components/customer-card";
@@ -138,7 +138,23 @@ export default function GuncelledPage() {
         }
       }
 
-      const result = await updateCustomerField(preview.number, field, value);
+      const result = field === "payment_status" && value === "Ödendi"
+        ? await (() => {
+            const rawPaymentMethod = preview.payment_method || "";
+            const separatorIdx = rawPaymentMethod.indexOf(" | ");
+            const existingManual = separatorIdx === -1 ? rawPaymentMethod : rawPaymentMethod.slice(0, separatorIdx);
+            const paidAllAmount = Math.max(0, Number(preview.price ?? 0));
+            const autoNote = `${formatPrice(paidAllAmount)} ₺ ödendi; kalan borç ${formatPrice(0)} ₺`;
+            const payment_method = existingManual.trim()
+              ? `${existingManual.trim()} | ${autoNote}`
+              : autoNote;
+            return updateCustomerFields(preview.number, {
+              payment_status: value,
+              price: 0,
+              payment_method,
+            });
+          })()
+        : await updateCustomerField(preview.number, field, value);
       if (result?.error) {
         setError(result.error);
       } else {

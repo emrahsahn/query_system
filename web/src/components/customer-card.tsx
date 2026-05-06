@@ -405,12 +405,28 @@ export function CustomerCard({ customer }: CustomerCardProps) {
           }
         } else {
           // Non-partial case: update status and manual note
+          const paidAllAmount = Math.max(0, Number(customer.price ?? 0));
+          const paidAllAutoNote = `${formatPrice(paidAllAmount)} ₺ ödendi; kalan borç ${formatPrice(0)} ₺`;
+          const paymentMethodForStatus =
+            editValue === "Ödendi"
+              ? (manualNote.trim() ? `${manualNote.trim()} | ${paidAllAutoNote}` : paidAllAutoNote)
+              : manualNote.trim();
+
           const result = await updateCustomerFields(customer.number, {
             payment_status: editValue,
-            payment_method: manualNote.trim()
+            payment_method: paymentMethodForStatus,
+            ...(editValue === "Ödendi" ? { price: 0 } : {}),
           });
           if (result?.error) setError(result.error);
-          else setEditOpen(false);
+          else {
+            if (editValue === "Ödendi") {
+              const { autoNote: previousAutoNote } = splitPaymentMethod(customer.payment_method);
+              if (previousAutoNote.trim()) {
+                setAutoHistoryRows((prev) => [...prev, previousAutoNote.trim()]);
+              }
+            }
+            setEditOpen(false);
+          }
         }
         setSubmitting(false);
         return;
@@ -469,7 +485,16 @@ export function CustomerCard({ customer }: CustomerCardProps) {
         previewCustomer.payment_method = manualNote ? `${manualNote} | ${auto}` : auto;
         previewCustomer.price = remaining;
       } else {
-        previewCustomer.payment_method = manualNote;
+        if (editValue === "Ödendi") {
+          const paidAllAmount = Math.max(0, Number(customer.price ?? 0));
+          const paidAllAutoNote = `${formatPrice(paidAllAmount)} ₺ ödendi; kalan borç ${formatPrice(0)} ₺`;
+          previewCustomer.payment_method = manualNote ? `${manualNote} | ${paidAllAutoNote}` : paidAllAutoNote;
+        } else {
+          previewCustomer.payment_method = manualNote;
+        }
+        if (editValue === "Ödendi") {
+          previewCustomer.price = 0;
+        }
       }
     } else {
       (previewCustomer as any)[editField.key] = editValue;
