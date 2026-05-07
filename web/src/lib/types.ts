@@ -1,6 +1,15 @@
 export type PaymentStatus = "Belirsiz" | "Ödendi" | "Kısmi Ödeme" | "Ödenmedi";
 
 export interface Customer {
+  /**
+   * Müşteri kaydını benzersiz tanımlayan rastgele üretilmiş kısa kimlik
+   * (composite primary key'in parçası). Kayıt eklenirken DB tarafında üretilir.
+   */
+  random_id: string;
+  /**
+   * Hayvan numarası (composite PK'nin parçası). Birden fazla hayvan
+   * virgülle ayrılarak tutulur, örn. "101, 102, 103".
+   */
   number: string;
   type: string;
   special: string;
@@ -11,6 +20,7 @@ export interface Customer {
   /** Anlaşılan / sözleşme tutarı; kısmi ödemede sabit kalır. */
   agreed_total?: number | null;
   price: number;
+  /** 11 haneli, '0' ile başlayan normalize edilmiş telefon. */
   phone_number: string;
   payment_method: string;
   payment_status: PaymentStatus;
@@ -19,6 +29,12 @@ export interface Customer {
   spray_paint_color: string;
   /** Boş string veya migrasyon öncesi kayıtlarda eksik olabilir. */
   note?: string | null;
+}
+
+/** Composite primary key bileşenleri — update / delete işlemlerinde kayıt eşleştirmek için. */
+export interface CustomerKey {
+  random_id: string;
+  number: string;
 }
 
 export const PAYMENT_OPTIONS: PaymentStatus[] = [
@@ -50,6 +66,7 @@ export type HistoryAction = "create" | "update" | "delete";
 
 /** Tetikleyicide kaydedilen jsonb snapshot (alanlar DB ile uyumlu). */
 export interface CustomerSnapshot {
+  random_id?: string | null;
   number?: string;
   type?: string | null;
   special?: string | null;
@@ -71,6 +88,8 @@ export interface CustomerSnapshot {
 export interface HistoryEntry {
   id: string;
   hayvan_number: string;
+  /** Migrasyon sonrası mevcut: composite key'in benzersiz parçası. */
+  random_id?: string | null;
   snapshot: CustomerSnapshot;
   recorded_at: string;
   action: HistoryAction;

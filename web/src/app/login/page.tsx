@@ -9,14 +9,14 @@ export default function LoginPage() {
           <div className="mb-4 flex justify-center">
             <Image
               src="/logo.jpeg"
-              alt="Kurbanlık Takip Sistemi"
+              alt="Kurban Yönetim Sistemi"
               width={112}
               height={112}
               className="h-28 w-28 object-contain"
               priority
             />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Kurbanlık Takip Sistemi</h1>
+          <h1 className="text-2xl font-bold text-foreground">Kurban Yönetim Sistemi</h1>
           <p className="mt-2 text-sm text-muted-foreground">Devam etmek için giriş yapın</p>
         </div>
 

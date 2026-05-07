@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getStats } from "@/lib/supabase/queries";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { List, Search, Plus, BarChart2, RefreshCw, Trash2 } from "lucide-react";
+import { List, Search, Plus, BarChart2, Trash2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ const quickLinks = [
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  let stats = { count: 0, total: 0, unpaidTotal: 0, unpaidCount: 0, collectedTotal: 0 };
+  let stats = { count: 0, animalCount: 0, total: 0, unpaidTotal: 0, unpaidCount: 0, collectedTotal: 0 };
   try {
     stats = await getStats(supabase);
   } catch {}
@@ -27,7 +27,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Karşılama */}
-      <div className="rounded-xl border border-border bg-card p-8">
+      <div className="premium-card-interactive rounded-xl border border-border bg-card p-8">
         <h2 className="mb-2 text-2xl font-bold text-foreground">Hoş Geldiniz 👋</h2>
         <p className="text-muted-foreground">
           Bu sistem, kurbanlık hayvanların müşteri takibini kolaylaştırmak için tasarlanmıştır.
@@ -37,19 +37,19 @@ export default async function DashboardPage() {
 
       {/* İstatistik kartları */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 text-center shadow-sm">
-          <p className="text-2xl sm:text-3xl font-extrabold text-green">{stats.count}</p>
-          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">📊 Kayıtlı Hayvan</p>
+        <div className="group premium-card-interactive rounded-xl border-2 border-border bg-card p-4 sm:p-5 text-center">
+          <p className="text-2xl sm:text-3xl font-extrabold text-green">{stats.animalCount}</p>
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">📊 Kayıtlı Hayvan ({stats.count} kayıt)</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 text-center shadow-sm">
+        <div className="group premium-card-interactive rounded-xl border-2 border-border bg-card p-4 sm:p-5 text-center">
           <p className="text-xl sm:text-3xl font-extrabold text-gold break-all">{formatPrice(stats.total)} ₺</p>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">💰 Anlaşılan Toplam (Beklenen)</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 text-center shadow-sm">
+        <div className="group premium-card-interactive rounded-xl border-2 border-border bg-card p-4 sm:p-5 text-center">
           <p className="text-xl sm:text-3xl font-extrabold text-green break-all">{formatPrice(stats.collectedTotal)} ₺</p>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">✅ Tahsil Edilen Tutar</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 sm:p-5 text-center shadow-sm">
+        <div className="group premium-card-interactive rounded-xl border-2 border-border bg-card p-4 sm:p-5 text-center">
           <p className="text-2xl sm:text-3xl font-extrabold text-red">{stats.unpaidCount}</p>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">❗ Bekleyen Ödeme</p>
         </div>
@@ -64,11 +64,11 @@ export default async function DashboardPage() {
               key={href}
               variant="outline"
               asChild
-              className="h-auto w-full min-h-[5.25rem] flex-col justify-center gap-2 py-4 px-3 sm:min-h-0 sm:py-5"
+              className="premium-card-interactive group h-auto w-full min-h-[5.25rem] flex-col justify-center gap-2 py-4 px-3 sm:min-h-0 sm:py-5 border-2 border-border"
             >
               <Link href={href} className="flex flex-col items-center gap-2">
-                <Icon className={`h-6 w-6 shrink-0 ${color}`} />
-                <span className="text-center text-xs font-medium leading-tight sm:text-sm">{label}</span>
+                <Icon className={`h-6 w-6 shrink-0 transition-transform duration-300 group-hover:scale-110 ${color}`} />
+                <span className="text-center text-xs font-medium leading-tight sm:text-sm group-hover:text-primary transition-colors">{label}</span>
               </Link>
             </Button>
           ))}

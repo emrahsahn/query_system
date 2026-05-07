@@ -187,4 +187,40 @@ body {
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
   .safe-left   { padding-left: env(safe-area-inset-left); }
   .safe-right  { padding-right: env(safe-area-inset-right); }
+
+  /* Kart: yükselme + tema primary parlama (hover) */
+  .premium-card-interactive {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    box-shadow:
+      0 1px 2px 0 rgb(0 0 0 / 0.05),
+      0 1px 3px 0 rgb(0 0 0 / 0.08);
+  }
+  .premium-card-interactive:hover {
+    transform: translateY(-0.25rem);
+    box-shadow:
+      0 14px 32px -10px rgb(0 0 0 / 0.14),
+      0 0 0 1px color-mix(in srgb, var(--color-primary) 52%, transparent),
+      0 0 36px -4px color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+  .premium-card-interactive-md {
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.1),
+      0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+  .premium-card-interactive-md:hover {
+    box-shadow:
+      0 16px 36px -12px rgb(0 0 0 / 0.16),
+      0 0 0 1px color-mix(in srgb, var(--color-primary) 52%, transparent),
+      0 0 40px -4px color-mix(in srgb, var(--color-primary) 32%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-card-interactive,
+  .premium-card-interactive-md {
+    transition-duration: 0.01ms;
+  }
+  .premium-card-interactive:hover {
+    transform: none;
+  }
 }

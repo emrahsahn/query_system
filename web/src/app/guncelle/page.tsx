@@ -1,9 +1,9 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { searchByNumber } from "@/lib/supabase/queries";
+import { searchByNumber, getCustomerByCompositeKey } from "@/lib/supabase/queries";
 import { applyPartialPayment, updateCustomerField, updateCustomerFields } from "@/actions/customers";
-import type { Customer } from "@/lib/types";
+import type { Customer, CustomerKey } from "@/lib/types";
 import { PAYMENT_OPTIONS, GROUP_CATEGORIES } from "@/lib/types";
 import { CustomerCard } from "@/components/customer-card";
 import { CustomerHistoryPanel } from "@/components/customer-history-panel";
@@ -13,7 +13,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckCircle2, Search } from "lucide-react";
-import { formatPrice } from "@/lib/utils";
+import {
+  formatPrice,
+  formatPhoneDisplay,
+  normalizePhone,
+  parseAnimalNumbers,
+} from "@/lib/utils";
 import { formatMoneyInputTR, formatPhoneInputTR, parseMoneyTR } from "@/lib/input-format";
 
 const UPDATE_FIELDS = [
@@ -36,6 +41,7 @@ const UPDATE_FIELDS = [
 
 export default function GuncelledPage() {
   const [searchNum, setSearchNum] = useState("");
+  const [matches, setMatches] = useState<Customer[]>([]);
   const [preview, setPreview] = useState<Customer | null>(null);
   const [searching, setSearching] = useState(false);
   const [field, setField] = useState("type");
@@ -47,6 +53,14 @@ export default function GuncelledPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [historyRefresh, setHistoryRefresh] = useState(0);
+
+  const compositeKey: CustomerKey | null = useMemo(() => {
+    if (!preview) return null;
+    return {
+      random_id: preview.random_id,
+      number: preview.number,
+    };
+  }, [preview]);
 
   function syncFormFromCustomer(c: Customer | null) {
     if (!c) {
@@ -68,15 +82,19 @@ export default function GuncelledPage() {
     if (!searchNum.trim()) return;
     setSearching(true);
     setError("");
+    setMatches([]);
     setPreview(null);
     syncFormFromCustomer(null);
     const supabase = createClient();
     try {
       const res = await searchByNumber(supabase, searchNum.trim());
-      const next = res[0] ?? null;
-      setPreview(next);
-      syncFormFromCustomer(next);
-      if (!res[0]) setError(`#${searchNum} numaralı kayıt bulunamadı.`);
+      setMatches(res);
+      if (res.length === 1) {
+        setPreview(res[0]);
+        syncFormFromCustomer(res[0]);
+      } else if (res.length === 0) {
+        setError(`"${searchNum.trim()}" hayvan numarasıyla eşleşen kayıt bulunamadı.`);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Hata oluştu.");
     } finally {
@@ -84,8 +102,19 @@ export default function GuncelledPage() {
     }
   }
 
+  async function refreshPreviewByKey(key: CustomerKey) {
+    const supabase = createClient();
+    try {
+      const next = await getCustomerByCompositeKey(supabase, key);
+      setPreview(next);
+      syncFormFromCustomer(next);
+    } catch {
+      // Sessizce yok say — sayfa yenilenirse tekrar yüklenecek.
+    }
+  }
+
   async function handleUpdate() {
-    if (!preview) return;
+    if (!preview || !compositeKey) return;
     setError("");
     setSubmitting(true);
 
@@ -95,18 +124,14 @@ export default function GuncelledPage() {
           setError("Kısmi ödeme için ödenen tutarı girin.");
           return;
         }
-        const result = await applyPartialPayment(preview.number, paidAmount);
+        const result = await applyPartialPayment(compositeKey, paidAmount);
         if (result?.error) {
           setError(result.error);
           return;
         }
         setSuccess(true);
         setPaidAmount("");
-        const supabase = createClient();
-        const res = await searchByNumber(supabase, preview.number);
-        const next = res[0] ?? null;
-        setPreview(next);
-        syncFormFromCustomer(next);
+        await refreshPreviewByKey(compositeKey);
         setHistoryRefresh((k) => k + 1);
         setTimeout(() => setSuccess(false), 2000);
         return;
@@ -115,24 +140,27 @@ export default function GuncelledPage() {
       const value = field === "payment_status" ? payStatus
         : field === "group_category" ? (groupCat === "__none__" ? "" : groupCat)
         : newValue.trim();
-      const allowEmpty = field === "group_category" || field === "note" || field === "address";
+      const allowEmpty =
+        field === "group_category" ||
+        field === "note" ||
+        field === "address" ||
+        field === "phone_number";
       if (!value && !allowEmpty) {
         setError("Yeni değer boş olamaz.");
         return;
       }
 
-      if (field === "number" && !/^\d+$/.test(value)) {
-        setError("Numara yalnızca rakamlardan oluşmalıdır.");
+      if (field === "number" && !/^\d+(\s*,\s*\d+)*$/.test(value)) {
+        setError("Hayvan numarası rakamlardan oluşmalı; birden fazla için virgülle ayırın (örn. 101, 102, 103).");
         return;
       }
       if (field === "price" && !Number.isFinite(parseMoneyTR(value))) {
         setError("Geçerli bir fiyat girin.");
         return;
       }
-      if (field === "phone_number") {
-        const clean = value.replace(/[\s\-]/g, "");
-        const norm = clean.length === 10 && !clean.startsWith("0") ? "0" + clean : clean;
-        if (!/^\d{11}$/.test(norm)) {
+      if (field === "phone_number" && value !== "") {
+        const norm = normalizePhone(value);
+        if (!norm) {
           setError("Geçerli bir telefon girin. Örn: 0532 123 45 67");
           return;
         }
@@ -148,23 +176,31 @@ export default function GuncelledPage() {
             const payment_method = existingManual.trim()
               ? `${existingManual.trim()} | ${autoNote}`
               : autoNote;
-            return updateCustomerFields(preview.number, {
+            return updateCustomerFields(compositeKey, {
               payment_status: value,
               price: 0,
               payment_method,
             });
           })()
-        : await updateCustomerField(preview.number, field, value);
+        : await updateCustomerField(compositeKey, field, value);
       if (result?.error) {
         setError(result.error);
       } else {
         setSuccess(true);
         setNewValue("");
-        const supabase = createClient();
-        const res = await searchByNumber(supabase, field === "number" ? value : preview.number);
-        const next = res[0] ?? null;
-        setPreview(next);
-        syncFormFromCustomer(next);
+        // Composite key parçalarından number güncellendiyse yeni key ile çek.
+        const nextKey: CustomerKey = {
+          random_id: compositeKey.random_id,
+          number:
+            field === "number"
+              ? value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0)
+                  .join(", ")
+              : compositeKey.number,
+        };
+        await refreshPreviewByKey(nextKey);
         setHistoryRefresh((k) => k + 1);
         setTimeout(() => setSuccess(false), 2000);
       }
@@ -180,25 +216,66 @@ export default function GuncelledPage() {
       <h1 className="text-2xl font-bold text-foreground text-center">🔄 Müşteri Bilgisi Güncelle</h1>
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-        {/* Sol panel - arama + güncelleme (yükseklik sağ panele bağlı büyümesin) */}
+        {/* Sol panel - arama + güncelleme */}
         <div className="rounded-xl border border-border bg-card p-4 md:p-6 shadow-sm space-y-5 h-fit w-full min-w-0 self-start">
           <h2 className="font-semibold text-foreground">🎯 İşlem Detayları</h2>
 
           {/* Kayıt ara */}
           <div className="space-y-2">
-            <Label>🔑 Mevcut Hayvan Numarası</Label>
+            <Label>🔑 Hayvan Numarası</Label>
             <div className="flex gap-2">
               <Input
                 value={searchNum}
                 onChange={(e) => setSearchNum(e.target.value)}
-                placeholder="Hayvan numarası"
+                placeholder="Örn: 101"
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               />
               <Button variant="outline" size="icon" onClick={handleSearch} disabled={searching}>
                 <Search className="h-4 w-4" />
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Tek bir numara girmeniz yeterli. Aynı numarayı içeren tüm gruplar listelenir.
+            </p>
           </div>
+
+          {/* Birden fazla eşleşme — kayıt seçici */}
+          {matches.length > 1 && (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+              <Label>{matches.length} kayıt bulundu — birini seçin</Label>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {matches.map((m, i) => {
+                  const isSelected = preview?.random_id === m.random_id && preview?.number === m.number;
+                  const animals = parseAnimalNumbers(m.number);
+                  const matchKey = m.random_id || `${m.phone_number}-${m.number}-${i}`;
+                  return (
+                    <button
+                      key={matchKey}
+                      type="button"
+                      onClick={() => {
+                        setPreview(m);
+                        syncFormFromCustomer(m);
+                      }}
+                      className={`w-full text-left rounded-md border px-3 py-2 text-xs transition-colors ${
+                        isSelected
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card hover:bg-accent/50"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center gap-1 mb-0.5">
+                        {animals.map((n, i) => (
+                          <span key={`${n}-${i}`} className="font-bold text-destructive">#{n}{i < animals.length - 1 ? "," : ""}</span>
+                        ))}
+                      </div>
+                      <div className="text-muted-foreground truncate">
+                        {m.whose || "—"} · {formatPhoneDisplay(m.phone_number) || "—"} · {formatPrice(Number(m.price ?? 0))} ₺
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Alan seçimi */}
           <div className="space-y-2">
@@ -210,6 +287,10 @@ export default function GuncelledPage() {
                 setPaidAmount("");
                 if (preview && (v === "note" || v === "address")) {
                   setNewValue(v === "note" ? (preview.note ?? "") : (preview.address ?? ""));
+                } else if (preview && v === "number") {
+                  setNewValue(preview.number);
+                } else if (preview && v === "phone_number") {
+                  setNewValue(formatPhoneDisplay(preview.phone_number));
                 } else {
                   setNewValue("");
                 }
@@ -283,23 +364,32 @@ export default function GuncelledPage() {
                 className="resize-y min-h-[100px]"
               />
             ) : (
-              <Input
-                value={newValue}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (field === "price") setNewValue(formatMoneyInputTR(v));
-                  else if (field === "phone_number") setNewValue(formatPhoneInputTR(v));
-                  else setNewValue(v);
-                }}
-                inputMode={field === "price" ? "decimal" : field === "phone_number" ? "tel" : undefined}
-                placeholder={
-                  field === "price"
-                    ? "Örn: 15.400,50"
-                    : field === "phone_number"
-                      ? "Örn: 0532 123 45 67"
-                      : "Yeni değer"
-                }
-              />
+              <>
+                <Input
+                  value={newValue}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (field === "price") setNewValue(formatMoneyInputTR(v));
+                    else if (field === "phone_number") setNewValue(formatPhoneInputTR(v));
+                    else setNewValue(v);
+                  }}
+                  inputMode={field === "price" ? "decimal" : field === "phone_number" ? "tel" : undefined}
+                  placeholder={
+                    field === "price"
+                      ? "Örn: 15.400,50"
+                      : field === "phone_number"
+                        ? "Örn: 0532 123 45 67"
+                        : field === "number"
+                          ? "Örn: 101 veya 101, 102, 103"
+                          : "Yeni değer"
+                  }
+                />
+                {field === "number" && (
+                  <p className="text-xs text-muted-foreground">
+                    Birden fazla hayvan için virgülle ayırın.
+                  </p>
+                )}
+              </>
             )}
           </div>
 
@@ -323,14 +413,17 @@ export default function GuncelledPage() {
             <>
               <CustomerCard customer={preview} />
               <CustomerHistoryPanel
-                key={`${preview.number}-${historyRefresh}`}
+                key={`${preview.random_id}-${historyRefresh}`}
                 hayvanNumber={preview.number}
+                randomId={preview.random_id}
                 currentCustomer={preview}
               />
             </>
           ) : (
             <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
-              Numarayı arayarak kaydı görüntüleyin.
+              {matches.length > 1
+                ? "Yukarıdaki listeden bir kayıt seçin."
+                : "Numarayı arayarak kaydı görüntüleyin."}
             </div>
           )}
         </div>

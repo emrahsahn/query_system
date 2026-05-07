@@ -28,12 +28,12 @@ export function MobileTopbar() {
         <div className="flex items-center gap-2">
           <Image
             src="/logo.jpeg"
-            alt="Kurbanlık Takip Sistemi"
+            alt="Kurban Yönetim Sistemi"
             width={28}
             height={28}
             className="h-7 w-7 shrink-0 object-contain"
           />
-          <span className="text-sm font-bold text-sidebar-foreground">Kurbanlık Takip</span>
+          <span className="text-sm font-bold text-sidebar-foreground">Kurban Yönetim</span>
         </div>
 
         <ThemeToggle />

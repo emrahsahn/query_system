@@ -3,17 +3,31 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { customerSchema } from "@/lib/validations";
 import { parseMoneyTR } from "@/lib/input-format";
-import { TABLE } from "@/lib/types";
-
-function formatPhone(phone: string): string {
-  const d = phone.replace(/\D/g, "");
-  if (d.length === 11) return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9)}`;
-  return d;
-}
+import { TABLE, type CustomerKey } from "@/lib/types";
+import { generateRandomId, normalizePhone } from "@/lib/utils";
 
 function isMissingAgreedTotalDbError(message: string): boolean {
   return /agreed_total/i.test(message) && /does not exist|column/i.test(message);
 }
+
+function isDuplicatePkError(message: string): boolean {
+  return /duplicate key/i.test(message) || /unique constraint/i.test(message) || /23505/.test(message);
+}
+
+// Composite key (random_id + number) sorgu zincirleri inline olarak
+// kullanılır; çünkü generic bir helper ile sarılınca Supabase'in derin generic
+// chain tipi TS2589 (excessively deep) hatası verir.
+
+function revalidateAll() {
+  revalidatePath("/musteriler");
+  revalidatePath("/guncelle");
+  revalidatePath("/sil");
+  revalidatePath("/istatistikler");
+  revalidatePath("/sorgula");
+  revalidatePath("/");
+}
+
+// ─── Tekil ekleme ──────────────────────────────────────────────────────────────
 
 export async function addCustomer(formData: unknown) {
   const parsed = customerSchema.safeParse(formData);
@@ -24,13 +38,14 @@ export async function addCustomer(formData: unknown) {
   const data = parsed.data;
   const supabase = await createClient();
 
-  const { data: existing } = await supabase
-    .from(TABLE).select("number").eq("number", data.number).maybeSingle();
-  if (existing) return { error: `#${data.number} numaralı kayıt zaten mevcut.` };
+  // Telefon opsiyonel: boşsa "" olarak saklanır. Dolu girildiyse normalize edilmiş
+  // 11 haneli formatı bekleriz (zod schema kontrolü zaten yapıldı).
+  const phone = normalizePhone(data.phone_number);
 
-  const phone = formatPhone(data.phone_number ?? "");
+  const random_id = generateRandomId();
   const initialPrice = Number(data.price) || 0;
   const row = {
+    random_id,
     number: data.number,
     type: data.type,
     special: data.special,
@@ -52,23 +67,122 @@ export async function addCustomer(formData: unknown) {
   let { error } = await supabase.from(TABLE).insert(row);
   if (error && isMissingAgreedTotalDbError(error.message)) {
     const { agreed_total: _a, ...withoutAgreed } = row;
+    void _a;
     ({ error } = await supabase.from(TABLE).insert(withoutAgreed));
   }
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (isDuplicatePkError(error.message)) {
+      return { error: `Bu kayıt (${data.number}) zaten mevcut. Lütfen tekrar deneyin.` };
+    }
+    return { error: error.message };
+  }
 
-  revalidatePath("/musteriler");
-  revalidatePath("/istatistikler");
-  revalidatePath("/");
+  revalidateAll();
   return { success: true };
 }
+
+// ─── Toplu Excel Ekleme ───────────────────────────────────────────────────────
+
+export interface BulkSkippedRow {
+  rowIndex: number;
+  number: string;
+  reason: string;
+}
+
+export interface BulkImportResult {
+  inserted: number;
+  skipped: BulkSkippedRow[];
+}
+
+export async function addCustomersBulk(
+  rows: unknown[]
+): Promise<BulkImportResult | { error: string }> {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { error: "İçe aktarılacak satır bulunamadı." };
+  }
+
+  const supabase = await createClient();
+
+  const toInsert: object[] = [];
+  const skipped: BulkSkippedRow[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const parsed = customerSchema.safeParse(rows[i]);
+
+    if (!parsed.success) {
+      const raw = rows[i] as Record<string, unknown>;
+      const num = String(raw?.number ?? "");
+      const messages = parsed.error.issues.map((iss) => iss.message).join("; ");
+      skipped.push({
+        rowIndex: i,
+        number: num,
+        reason: `Doğrulama hatası: ${messages}`,
+      });
+      continue;
+    }
+
+    const data = parsed.data;
+    // Telefon opsiyonel: boş veya geçersizse boş string saklanır, satır atlanmaz.
+    const phone = normalizePhone(data.phone_number);
+
+    const initialPrice = Number(data.price) || 0;
+
+    toInsert.push({
+      random_id: generateRandomId(),
+      number: data.number,
+      type: data.type,
+      special: data.special,
+      color_of_earring: data.color_of_earring,
+      color_of_animal: data.color_of_animal,
+      whose: data.whose,
+      from_whom: data.from_whom,
+      agreed_total: initialPrice,
+      price: initialPrice,
+      phone_number: phone,
+      payment_method: data.payment_method,
+      payment_status: data.payment_status,
+      group_category: data.group_category,
+      address: data.address,
+      spray_paint_color: data.spray_paint_color,
+      note: data.note,
+    });
+  }
+
+  if (toInsert.length === 0) {
+    return { inserted: 0, skipped };
+  }
+
+  let { error: insertErr } = await supabase.from(TABLE).insert(toInsert);
+
+  if (insertErr && isMissingAgreedTotalDbError(insertErr.message)) {
+    const withoutAgreed = toInsert.map((row) => {
+      const { agreed_total: _a, ...rest } = row as Record<string, unknown>;
+      void _a;
+      return rest;
+    });
+    ({ error: insertErr } = await supabase.from(TABLE).insert(withoutAgreed));
+  }
+
+  if (insertErr) return { error: insertErr.message };
+
+  revalidateAll();
+
+  return { inserted: toInsert.length, skipped };
+}
+
+// ─── Kısmi ödeme ───────────────────────────────────────────────────────────────
 
 const TL = new Intl.NumberFormat("tr-TR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-export async function applyPartialPayment(numberKey: string, paidAmountRaw: string, manualNote?: string) {
+export async function applyPartialPayment(
+  key: CustomerKey,
+  paidAmountRaw: string,
+  manualNote?: string
+) {
   const paidRaw = parseMoneyTR(String(paidAmountRaw).trim());
   const paid = Math.round(paidRaw * 100) / 100;
   if (!Number.isFinite(paid) || paid <= 0) {
@@ -81,20 +195,23 @@ export async function applyPartialPayment(numberKey: string, paidAmountRaw: stri
     price?: unknown;
     agreed_total?: unknown;
     payment_status?: unknown;
+    payment_method?: unknown;
   } | null = null;
   let fetchErr: { message: string } | null = null;
 
   const fullFetch = await supabase
     .from(TABLE)
-    .select("number, price, agreed_total, payment_status")
-    .eq("number", numberKey)
+    .select("number, price, agreed_total, payment_status, payment_method")
+    .eq("random_id", key.random_id)
+    .eq("number", key.number)
     .maybeSingle();
 
   if (fullFetch.error && isMissingAgreedTotalDbError(fullFetch.error.message)) {
     const legacyFetch = await supabase
       .from(TABLE)
-      .select("number, price, payment_status")
-      .eq("number", numberKey)
+      .select("number, price, payment_status, payment_method")
+      .eq("random_id", key.random_id)
+      .eq("number", key.number)
       .maybeSingle();
     row = legacyFetch.data;
     fetchErr = legacyFetch.error;
@@ -114,7 +231,6 @@ export async function applyPartialPayment(numberKey: string, paidAmountRaw: stri
     return { error: `Ödenen tutar kalan tutardan (${TL.format(currentPrice)} ₺) fazla olamaz.` };
   }
 
-  /** Anlaşılan tutar: kısmi ödemede sabit kalmalı; eksik/yanlış kayıtları her adımda düzelt. */
   const prevAgreed = Number(row.agreed_total ?? 0);
   let nextAgreed = Math.max(
     Number.isFinite(prevAgreed) ? prevAgreed : 0,
@@ -129,8 +245,19 @@ export async function applyPartialPayment(numberKey: string, paidAmountRaw: stri
   const remainingFmt = TL.format(Math.max(0, remaining));
   const autoNote = `${paidFmt} ₺ ödendi; kalan borç ${remainingFmt} ₺`;
   
-  // Combine manual note and auto note
-  const paymentMethod = manualNote ? `${manualNote.trim()} | ${autoNote}` : autoNote;
+  const currentPaymentMethod = String(row.payment_method || "");
+  const separatorIdx = currentPaymentMethod.indexOf(" | ");
+  let previousAutoNote = "";
+  if (separatorIdx === -1) {
+    if (currentPaymentMethod.includes("kalan borç") && currentPaymentMethod.includes("ödendi")) {
+      previousAutoNote = currentPaymentMethod;
+    }
+  } else {
+    previousAutoNote = currentPaymentMethod.slice(separatorIdx + 3);
+  }
+  
+  const combinedAutoNote = previousAutoNote.trim() ? `${previousAutoNote.trim()}\n${autoNote}` : autoNote;
+  const paymentMethod = manualNote ? `${manualNote.trim()} | ${combinedAutoNote}` : ` | ${combinedAutoNote}`;
 
   const payment_status =
     remaining <= 0 ? ("Ödendi" as const) : ("Kısmi Ödeme" as const);
@@ -142,40 +269,71 @@ export async function applyPartialPayment(numberKey: string, paidAmountRaw: stri
     agreed_total: nextAgreed,
   };
 
-  let { error } = await supabase.from(TABLE).update(patch).eq("number", numberKey);
+  let { error } = await supabase
+    .from(TABLE)
+    .update(patch)
+    .eq("random_id", key.random_id)
+    .eq("number", key.number);
 
   if (error && isMissingAgreedTotalDbError(error.message)) {
     const { agreed_total: _a, ...withoutAgreed } = patch;
-    ({ error } = await supabase.from(TABLE).update(withoutAgreed).eq("number", numberKey));
+    void _a;
+    ({ error } = await supabase
+      .from(TABLE)
+      .update(withoutAgreed)
+      .eq("random_id", key.random_id)
+      .eq("number", key.number));
   }
 
   if (error) return { error: error.message };
 
-  revalidatePath("/musteriler");
-  revalidatePath("/guncelle");
-  revalidatePath("/istatistikler");
-  revalidatePath("/");
+  revalidateAll();
   return { success: true };
 }
+
+// ─── Çoklu alan güncelleme ─────────────────────────────────────────────────────
 
 export async function updateCustomerFields(
-  number: string,
-  updates: Record<string, any>
+  key: CustomerKey,
+  updates: Record<string, unknown>
 ) {
   const supabase = await createClient();
-  const { error } = await supabase.from(TABLE).update(updates).eq("number", number);
 
-  if (error) return { error: error.message };
+  const patch: Record<string, unknown> = { ...updates };
+  if (typeof patch.phone_number === "string") {
+    const trimmed = patch.phone_number.trim();
+    if (trimmed === "") {
+      patch.phone_number = "";
+    } else {
+      const norm = normalizePhone(trimmed);
+      if (!norm) {
+        return { error: "Geçerli bir telefon numarası girin. Örn: 0532 123 45 67" };
+      }
+      patch.phone_number = norm;
+    }
+  }
 
-  revalidatePath("/musteriler");
-  revalidatePath("/guncelle");
-  revalidatePath("/istatistikler");
-  revalidatePath("/");
+  const { error } = await supabase
+    .from(TABLE)
+    .update(patch)
+    .eq("random_id", key.random_id)
+    .eq("number", key.number);
+
+  if (error) {
+    if (isDuplicatePkError(error.message)) {
+      return { error: "Aynı random ID ve hayvan numarasına sahip bir kayıt zaten mevcut." };
+    }
+    return { error: error.message };
+  }
+
+  revalidateAll();
   return { success: true };
 }
 
+// ─── Tek alan güncelleme ───────────────────────────────────────────────────────
+
 export async function updateCustomerField(
-  number: string,
+  key: CustomerKey,
   field: string,
   value: string
 ) {
@@ -186,30 +344,58 @@ export async function updateCustomerField(
     const n = parseMoneyTR(value);
     finalValue = Number.isFinite(n) ? n : 0;
   }
-  if (field === "phone_number") finalValue = formatPhone(value);
+  if (field === "phone_number") {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      finalValue = "";
+    } else {
+      const norm = normalizePhone(trimmed);
+      if (!norm) {
+        return { error: "Geçerli bir telefon numarası girin. Örn: 0532 123 45 67" };
+      }
+      finalValue = norm;
+    }
+  }
+  if (field === "number") {
+    const trimmed = value.trim();
+    if (!/^\d+(\s*,\s*\d+)*$/.test(trimmed)) {
+      return { error: "Hayvan numarası yalnızca rakamlardan oluşmalı; birden fazla için virgülle ayırın." };
+    }
+    finalValue = trimmed
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .join(", ");
+  }
 
   const { error } = await supabase
     .from(TABLE)
     .update({ [field]: finalValue })
-    .eq("number", number);
+    .eq("random_id", key.random_id)
+    .eq("number", key.number);
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (isDuplicatePkError(error.message)) {
+      return { error: "Aynı random ID ve hayvan numarasına sahip bir kayıt zaten mevcut." };
+    }
+    return { error: error.message };
+  }
 
-  revalidatePath("/musteriler");
-  revalidatePath("/guncelle");
-  revalidatePath("/istatistikler");
-  revalidatePath("/");
+  revalidateAll();
   return { success: true };
 }
 
-export async function deleteCustomer(number: string) {
+// ─── Silme ─────────────────────────────────────────────────────────────────────
+
+export async function deleteCustomer(key: CustomerKey) {
   const supabase = await createClient();
-  const { error } = await supabase.from(TABLE).delete().eq("number", number);
+  const { error } = await supabase
+    .from(TABLE)
+    .delete()
+    .eq("random_id", key.random_id)
+    .eq("number", key.number);
   if (error) return { error: error.message };
 
-  revalidatePath("/musteriler");
-  revalidatePath("/sil");
-  revalidatePath("/istatistikler");
-  revalidatePath("/");
+  revalidateAll();
   return { success: true };
 }

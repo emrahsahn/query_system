@@ -18,10 +18,20 @@ import {
 } from "@/components/ui/dialog";
 import { CustomerCard } from "@/components/customer-card";
 import { AlertTriangle, Search, Trash2 } from "lucide-react";
+import { formatPhoneDisplay, formatPrice, parseAnimalNumbers } from "@/lib/utils";
+
+function clearPaymentAutoHistory(randomId: string) {
+  try {
+    window.localStorage.removeItem(`payment-auto-history:${randomId}`);
+  } catch {
+    // localStorage erişim hataları silme akışını bozmamalı
+  }
+}
 
 export function DeleteClient() {
   const router = useRouter();
   const [searchNum, setSearchNum] = useState("");
+  const [matches, setMatches] = useState<Customer[]>([]);
   const [preview, setPreview] = useState<Customer | null>(null);
   const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(false);
@@ -32,12 +42,17 @@ export function DeleteClient() {
     if (!searchNum.trim()) return;
     setSearching(true);
     setError("");
+    setMatches([]);
     setPreview(null);
     const supabase = createClient();
     try {
       const res = await searchByNumber(supabase, searchNum.trim());
-      setPreview(res[0] ?? null);
-      if (!res[0]) setError(`#${searchNum.trim()} numaralı kayıt bulunamadı.`);
+      setMatches(res);
+      if (res.length === 1) {
+        setPreview(res[0]);
+      } else if (res.length === 0) {
+        setError(`"${searchNum.trim()}" hayvan numarasıyla eşleşen kayıt bulunamadı.`);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Arama sırasında hata oluştu.");
     } finally {
@@ -49,13 +64,18 @@ export function DeleteClient() {
     if (!preview) return;
     setDeleting(true);
     setError("");
-    const result = await deleteCustomer(preview.number);
+    const result = await deleteCustomer({
+      random_id: preview.random_id,
+      number: preview.number,
+    });
     if (result?.error) {
       setError(result.error);
       setDeleting(false);
     } else {
+      clearPaymentAutoHistory(preview.random_id);
       setOpen(false);
       setPreview(null);
+      setMatches([]);
       setSearchNum("");
       router.refresh();
       setDeleting(false);
@@ -87,7 +107,46 @@ export function DeleteClient() {
               <Search className="h-4 w-4" />
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Tek bir numara girmeniz yeterli. Aynı numarayı içeren tüm gruplar listelenir.
+          </p>
         </div>
+
+        {matches.length > 1 && (
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+            <Label>{matches.length} kayıt bulundu — silmek istediğinizi seçin</Label>
+            <div className="space-y-1.5 max-h-56 overflow-y-auto">
+              {matches.map((m, i) => {
+                const isSelected = preview?.random_id === m.random_id && preview?.number === m.number;
+                const animals = parseAnimalNumbers(m.number);
+                const matchKey = m.random_id || `${m.phone_number}-${m.number}-${i}`;
+                return (
+                  <button
+                    key={matchKey}
+                    type="button"
+                    onClick={() => setPreview(m)}
+                    className={`w-full text-left rounded-md border px-3 py-2 text-xs transition-colors ${
+                      isSelected
+                        ? "border-destructive bg-destructive/10"
+                        : "border-border bg-card hover:bg-accent/50"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-1 mb-0.5">
+                      {animals.map((n, i) => (
+                        <span key={`${n}-${i}`} className="font-bold text-destructive">
+                          #{n}{i < animals.length - 1 ? "," : ""}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="text-muted-foreground truncate">
+                      {m.whose || "—"} · {formatPhoneDisplay(m.phone_number) || "—"} · {formatPrice(Number(m.price ?? 0))} ₺
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {preview && (
           <>
@@ -96,7 +155,7 @@ export function DeleteClient() {
           </>
         )}
 
-        {!preview && !error && !searching && (
+        {!preview && matches.length === 0 && !error && !searching && (
           <p className="text-sm text-muted-foreground text-center py-6">
             Numarayı girip arama yapın.
           </p>
@@ -123,7 +182,8 @@ export function DeleteClient() {
             <DialogDescription>
               {preview && (
                 <>
-                  <strong>#{preview.number}</strong> numaralı kayıt kalıcı olarak silinecektir.
+                  <strong>#{preview.number}</strong> numaralı kayıt ({preview.whose || "isimsiz"} ·{" "}
+                  {formatPhoneDisplay(preview.phone_number) || "telefonsuz"}) kalıcı olarak silinecektir.
                   Bu işlem geri alınamaz.
                 </>
               )}

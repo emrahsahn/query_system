@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Customer, PaymentStatus } from "@/lib/types";
+import type { Customer, CustomerKey, PaymentStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { formatPrice } from "@/lib/utils";
+import {
+  formatPrice,
+  parseAnimalNumbers,
+  formatPhoneDisplay,
+  normalizePhone,
+} from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,17 +28,23 @@ import { formatMoneyInputTR, formatPhoneInputTR, parseMoneyTR, phoneToTelHref } 
 function splitPaymentMethod(value: string | null | undefined) {
   const raw = value || "";
   const separatorIdx = raw.indexOf(" | ");
-  if (separatorIdx === -1) return { manualNote: raw, autoNote: "" };
+  if (separatorIdx === -1) {
+    if (raw.includes("kalan borç") && raw.includes("ödendi")) {
+      return { manualNote: "", autoNote: raw };
+    }
+    return { manualNote: raw, autoNote: "" };
+  }
   return {
     manualNote: raw.slice(0, separatorIdx),
     autoNote: raw.slice(separatorIdx + 3),
   };
 }
 
-function buildAutoRows(currentAuto: string, historyRows: string[]) {
+function buildAutoRows(autoNoteString: string) {
   const seen = new Set<string>();
   const rows: string[] = [];
-  for (const row of [currentAuto, ...historyRows]) {
+  const lines = autoNoteString.split('\n');
+  for (const row of lines) {
     const line = row.trim();
     if (!line || seen.has(line)) continue;
     seen.add(line);
@@ -46,7 +57,6 @@ function buildAutoRows(currentAuto: string, historyRows: string[]) {
     return Number.isFinite(amount) ? amount : Number.POSITIVE_INFINITY;
   };
 
-  // Kartta aşağı doğru gidildikçe kalan borç büyüsün.
   return rows.sort((a, b) => extractRemainingDebt(a) - extractRemainingDebt(b));
 }
 
@@ -60,10 +70,25 @@ function paymentBadge(status: PaymentStatus) {
   return <Badge variant={map[status] ?? "belirsiz"}>{status}</Badge>;
 }
 
+/** Composite key alanlarını Customer'dan üretir. */
+function customerKey(c: Customer): CustomerKey {
+  return {
+    random_id: c.random_id,
+    number: c.number,
+  };
+}
+
 function printReceipt(customer: Customer, title: string) {
   const iframe = document.createElement("iframe");
   iframe.style.display = "none";
   document.body.appendChild(iframe);
+
+  const animals = parseAnimalNumbers(customer.number);
+  const animalDisplay = animals.length > 1 ? animals.join(", ") : (animals[0] ?? customer.number);
+  const isMulti = animals.length > 1;
+  const animalNumberStyle = isMulti
+    ? "text-30 font-black"
+    : "text-40 font-black";
 
   const content = `
     <html>
@@ -87,6 +112,7 @@ function printReceipt(customer: Customer, title: string) {
           .uppercase { text-transform: uppercase; }
           .font-black { font-weight: 900; }
           .text-40 { font-size: 40px; margin: 4px 0; line-height: 1; }
+          .text-30 { font-size: 26px; margin: 4px 0; line-height: 1.05; word-break: break-word; }
           .flex { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px;}
           .font-bold { font-weight: bold; }
           .border-b { border-bottom: 1px dashed black; padding-bottom: 12px; margin-bottom: 12px; }
@@ -98,12 +124,12 @@ function printReceipt(customer: Customer, title: string) {
       <body>
         <div class="title">${title}</div>
         <div class="center mb-3">
-          <div class="text-10 uppercase font-bold" style="letter-spacing: 1px; color: #333;">HAYVAN NO</div>
-          <div class="text-40 font-black">${customer.number}</div>
+          <div class="text-10 uppercase font-bold" style="letter-spacing: 1px; color: #333;">HAYVAN NO${isMulti ? "LARI" : ""}</div>
+          <div class="${animalNumberStyle}">${animalDisplay}</div>
         </div>
         <div class="border-b">
           <div class="flex"><span class="font-bold">Sahip:</span> <span class="uppercase break-words" style="text-align: right;">${customer.whose || "-"}</span></div>
-          <div class="flex"><span class="font-bold">Telefon:</span> <span>${customer.phone_number || "-"}</span></div>
+          <div class="flex"><span class="font-bold">Telefon:</span> <span>${formatPhoneDisplay(customer.phone_number) || "-"}</span></div>
         </div>
         <div class="border-b">
           <div class="flex"><span class="font-bold">Tür/Cins:</span> <span>${customer.type || "-"}</span></div>
@@ -132,13 +158,10 @@ function printReceipt(customer: Customer, title: string) {
     doc.close();
   }
 
-  // document.write renders synchronously for simple HTML.
-  // We use a small timeout to ensure browser paints before print.
   setTimeout(() => {
     iframe.contentWindow?.focus();
     iframe.contentWindow?.print();
 
-    // Temizlik
     setTimeout(() => {
       if (document.body.contains(iframe)) {
         document.body.removeChild(iframe);
@@ -152,43 +175,74 @@ interface CustomerCardInnerProps {
   onFieldClick?: (label: string, key: string, value: string) => void;
   onPrintClick?: () => void;
   isPreview?: boolean;
-  autoHistoryRows?: string[];
 }
 
-function CustomerCardInner({ c, onFieldClick, onPrintClick, isPreview, autoHistoryRows = [] }: CustomerCardInnerProps) {
+function CustomerCardInner({ c, onFieldClick, onPrintClick, isPreview }: CustomerCardInnerProps) {
   const { manualNote, autoNote } = splitPaymentMethod(c.payment_method);
-  const autoRows = buildAutoRows(autoNote, autoHistoryRows);
+  const autoRows = buildAutoRows(autoNote);
+  const animals = parseAnimalNumbers(c.number);
+  const phoneDisplay = formatPhoneDisplay(c.phone_number);
 
   const CardContent = (
-    <div className={`flex flex-col justify-between rounded-xl border border-border bg-card p-4 sm:p-5 shadow-sm transition-all duration-300 ${!isPreview ? "hover:-translate-y-1 hover:shadow-lg hover:border-primary" : ""}`}>
+    <div
+      className={`group flex flex-col justify-between rounded-xl border-2 border-border bg-card p-4 sm:p-5 ${!isPreview ? "premium-card-interactive" : "shadow-sm"}`}
+    >
       {/* Header */}
       <div>
         <div className="flex items-center justify-between border-b border-border pb-3 mb-3 gap-2">
-          <span
-            className={`text-lg sm:text-xl font-extrabold text-destructive shrink-0 ${onFieldClick ? "cursor-pointer hover:opacity-80" : ""}`}
-            onClick={() => onFieldClick?.("Numara", "number", c.number)}
+          <div
+            className={`flex flex-wrap items-center gap-1.5 min-w-0 ${onFieldClick ? "cursor-pointer hover:opacity-80" : ""}`}
+            onClick={() => onFieldClick?.("Hayvan Numarası", "number", c.number)}
+            title={animals.length > 1 ? `${animals.length} hayvan` : undefined}
           >
-            #{c.number}
-          </span>
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {animals.length === 0 ? (
+              <span className="text-lg sm:text-xl font-extrabold text-destructive shrink-0">
+                #{c.number || "—"}
+              </span>
+            ) : (
+              animals.map((n, idx) => (
+                <span
+                  key={`${n}-${idx}`}
+                  className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-sm sm:text-base font-extrabold text-destructive"
+                >
+                  #{n}
+                </span>
+              ))
+            )}
+            {animals.length > 1 && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                {animals.length} hayvan
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
             {c.group_category && (
               <span
                 className={`rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-[10px] font-semibold text-primary truncate max-w-[140px] ${onFieldClick ? "cursor-pointer hover:opacity-80" : ""}`}
                 title={c.group_category}
-                onClick={() => onFieldClick?.("Grup Kategorisi", "group_category", c.group_category ?? "")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFieldClick?.("Grup Kategorisi", "group_category", c.group_category ?? "");
+                }}
               >
                 📂 {c.group_category}
               </span>
             )}
             <span
               className={`rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold text-primary-foreground truncate max-w-[200px] ${onFieldClick ? "cursor-pointer hover:opacity-80" : ""}`}
-              onClick={() => onFieldClick?.("Cins", "type", c.type || "")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onFieldClick?.("Cins", "type", c.type || "");
+              }}
             >
               {c.type || "—"}
             </span>
             <div
               className={onFieldClick ? "cursor-pointer hover:opacity-80" : ""}
-              onClick={() => onFieldClick?.("Ödeme Durumu", "payment_status", c.payment_status)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onFieldClick?.("Ödeme Durumu", "payment_status", c.payment_status);
+              }}
             >
               {paymentBadge(c.payment_status as PaymentStatus)}
             </div>
@@ -206,6 +260,7 @@ function CustomerCardInner({ c, onFieldClick, onPrintClick, isPreview, autoHisto
             ["📞 Telefon", "phone_number", c.phone_number],
           ].map(([label, key, val]) => {
             const str = val || "";
+            const display = key === "phone_number" ? phoneDisplay : str;
             const tel = key === "phone_number" ? phoneToTelHref(str) : null;
             return (
             <div
@@ -214,16 +269,16 @@ function CustomerCardInner({ c, onFieldClick, onPrintClick, isPreview, autoHisto
               onClick={() => onFieldClick?.(label, key, str)}
             >
               <span className="text-green font-semibold shrink-0">{label}</span>
-              {tel && str ? (
+              {tel && display ? (
                 <a
                   href={tel}
                   className="text-primary text-right truncate underline-offset-2 hover:underline min-w-0 font-medium"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {str}
+                  {display}
                 </a>
               ) : (
-                <span className="text-muted-foreground text-right truncate">{str || "—"}</span>
+                <span className="text-muted-foreground text-right truncate">{display || "—"}</span>
               )}
             </div>
             );
@@ -319,7 +374,6 @@ export function CustomerCard({ customer }: CustomerCardProps) {
   const [printOpen, setPrintOpen] = useState(false);
   const [printTitle, setPrintTitle] = useState("2026 Kurbanlık Organizasyonu");
 
-  // Edit State
   const [editOpen, setEditOpen] = useState(false);
   const [editField, setEditField] = useState<{ label: string, key: string, value: string } | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -327,53 +381,27 @@ export function CustomerCard({ customer }: CustomerCardProps) {
   const [paidAmount, setPaidAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [autoHistoryRows, setAutoHistoryRows] = useState<string[]>([]);
-  const autoHistoryStorageKey = useMemo(() => `payment-auto-history:${customer.number}`, [customer.number]);
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(autoHistoryStorageKey);
-      if (!stored) {
-        setAutoHistoryRows([]);
-        return;
-      }
-      const parsed = JSON.parse(stored);
-      if (!Array.isArray(parsed)) {
-        setAutoHistoryRows([]);
-        return;
-      }
-      setAutoHistoryRows(parsed.filter((item): item is string => typeof item === "string"));
-    } catch {
-      setAutoHistoryRows([]);
-    }
-  }, [autoHistoryStorageKey]);
-
-  useEffect(() => {
-    try {
-      if (autoHistoryRows.length === 0) {
-        window.localStorage.removeItem(autoHistoryStorageKey);
-        return;
-      }
-      window.localStorage.setItem(autoHistoryStorageKey, JSON.stringify(autoHistoryRows));
-    } catch {
-      // localStorage erişim hataları UI akışını bozmamalı
-    }
-  }, [autoHistoryRows, autoHistoryStorageKey]);
+  const key: CustomerKey = useMemo(() => customerKey(customer), [customer]);
 
   const handlePrint = () => {
     printReceipt(customer, printTitle);
-    setPrintOpen(false); // Modal'ı kapat
+    setPrintOpen(false);
   };
 
-  const handleFieldClick = (label: string, key: string, value: string) => {
-    if (key === "payment_method" || key === "payment_status") {
+  const handleFieldClick = (label: string, fieldKey: string, value: string) => {
+    if (fieldKey === "payment_method" || fieldKey === "payment_status") {
       setEditField({ label: "Ödeme Bilgileri", key: "payment_combined", value: customer.payment_method });
       const { manualNote: existingManualNote } = splitPaymentMethod(customer.payment_method);
       setManualNote(existingManualNote || "");
       setEditValue(customer.payment_status);
       setPaidAmount("");
+    } else if (fieldKey === "phone_number") {
+      setEditField({ label, key: fieldKey, value });
+      setEditValue(formatPhoneDisplay(value));
+      setManualNote("");
+      setPaidAmount("");
     } else {
-      setEditField({ label, key, value });
+      setEditField({ label, key: fieldKey, value });
       setEditValue(value);
       setManualNote("");
       setPaidAmount("");
@@ -394,37 +422,30 @@ export function CustomerCard({ customer }: CustomerCardProps) {
             setSubmitting(false);
             return;
           }
-          const result = await applyPartialPayment(customer.number, paidAmount, manualNote);
+          const result = await applyPartialPayment(key, paidAmount, manualNote);
           if (result?.error) setError(result.error);
           else {
-            const { autoNote: previousAutoNote } = splitPaymentMethod(customer.payment_method);
-            if (previousAutoNote.trim()) {
-              setAutoHistoryRows((prev) => [...prev, previousAutoNote.trim()]);
-            }
             setEditOpen(false);
           }
         } else {
-          // Non-partial case: update status and manual note
           const paidAllAmount = Math.max(0, Number(customer.price ?? 0));
           const paidAllAutoNote = `${formatPrice(paidAllAmount)} ₺ ödendi; kalan borç ${formatPrice(0)} ₺`;
+          
+          const { autoNote: previousAutoNote } = splitPaymentMethod(customer.payment_method);
+          const combinedAutoNote = previousAutoNote.trim() ? `${previousAutoNote.trim()}\n${paidAllAutoNote}` : paidAllAutoNote;
+
           const paymentMethodForStatus =
             editValue === "Ödendi"
-              ? (manualNote.trim() ? `${manualNote.trim()} | ${paidAllAutoNote}` : paidAllAutoNote)
-              : manualNote.trim();
+              ? (manualNote.trim() ? `${manualNote.trim()} | ${combinedAutoNote}` : ` | ${combinedAutoNote}`)
+              : (manualNote.trim() ? `${manualNote.trim()} | ${previousAutoNote}` : (previousAutoNote ? ` | ${previousAutoNote}` : ""));
 
-          const result = await updateCustomerFields(customer.number, {
+          const result = await updateCustomerFields(key, {
             payment_status: editValue,
             payment_method: paymentMethodForStatus,
             ...(editValue === "Ödendi" ? { price: 0 } : {}),
           });
           if (result?.error) setError(result.error);
           else {
-            if (editValue === "Ödendi") {
-              const { autoNote: previousAutoNote } = splitPaymentMethod(customer.payment_method);
-              if (previousAutoNote.trim()) {
-                setAutoHistoryRows((prev) => [...prev, previousAutoNote.trim()]);
-              }
-            }
             setEditOpen(false);
           }
         }
@@ -432,9 +453,12 @@ export function CustomerCard({ customer }: CustomerCardProps) {
         return;
       }
 
-      // Standard field update logic
       let val = editValue.trim();
-      const allowEmpty = editField.key === "group_category" || editField.key === "note" || editField.key === "address";
+      const allowEmpty =
+        editField.key === "group_category" ||
+        editField.key === "note" ||
+        editField.key === "address" ||
+        editField.key === "phone_number";
 
       if (!val && !allowEmpty) {
         setError("Yeni değer boş olamaz.");
@@ -442,8 +466,8 @@ export function CustomerCard({ customer }: CustomerCardProps) {
         return;
       }
 
-      if (editField.key === "number" && !/^\d+$/.test(val)) {
-        setError("Numara yalnızca rakamlardan oluşmalıdır.");
+      if (editField.key === "number" && !/^\d+(\s*,\s*\d+)*$/.test(val)) {
+        setError("Hayvan numarası rakamlardan oluşmalı; birden fazla için virgülle ayırın (örn. 101, 102).");
         setSubmitting(false);
         return;
       }
@@ -452,54 +476,65 @@ export function CustomerCard({ customer }: CustomerCardProps) {
         setSubmitting(false);
         return;
       }
-      if (editField.key === "phone_number") {
-        const clean = val.replace(/[\s\-]/g, "");
-        const norm = clean.length === 10 && !clean.startsWith("0") ? "0" + clean : clean;
-        if (!/^\d{11}$/.test(norm)) {
+      if (editField.key === "phone_number" && val !== "") {
+        const norm = normalizePhone(val);
+        if (!norm) {
           setError("Geçerli bir telefon girin. Örn: 0532 123 45 67");
           setSubmitting(false);
           return;
         }
+        val = norm;
       }
 
-      const result = await updateCustomerField(customer.number, editField.key, val);
+      const result = await updateCustomerField(key, editField.key, val);
       if (result?.error) setError(result.error);
       else setEditOpen(false);
-    } catch (err: any) {
-      setError(err.message || "Güncelleme hatası");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Güncelleme hatası");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Preview object for the popup
-  const previewCustomer = { ...customer };
+  const previewCustomer: Customer = { ...customer };
   if (editField) {
     if (editField.key === "payment_combined") {
-      previewCustomer.payment_status = editValue as any;
+      previewCustomer.payment_status = editValue as PaymentStatus;
       if (editValue === "Kısmi Ödeme") {
-        // Mock automation note for preview
         const paid = parseMoneyTR(paidAmount) || 0;
         const remaining = Math.max(0, (customer.price || 0) - paid);
         const auto = `${formatPrice(paid)} ₺ ödendi; kalan borç ${formatPrice(remaining)} ₺`;
-        previewCustomer.payment_method = manualNote ? `${manualNote} | ${auto}` : auto;
+        const { autoNote: previousAutoNote } = splitPaymentMethod(customer.payment_method);
+        const combinedAutoNote = previousAutoNote.trim() ? `${previousAutoNote.trim()}\n${auto}` : auto;
+        previewCustomer.payment_method = manualNote ? `${manualNote} | ${combinedAutoNote}` : ` | ${combinedAutoNote}`;
         previewCustomer.price = remaining;
       } else {
         if (editValue === "Ödendi") {
           const paidAllAmount = Math.max(0, Number(customer.price ?? 0));
           const paidAllAutoNote = `${formatPrice(paidAllAmount)} ₺ ödendi; kalan borç ${formatPrice(0)} ₺`;
-          previewCustomer.payment_method = manualNote ? `${manualNote} | ${paidAllAutoNote}` : paidAllAutoNote;
+          const { autoNote: previousAutoNote } = splitPaymentMethod(customer.payment_method);
+          const combinedAutoNote = previousAutoNote.trim() ? `${previousAutoNote.trim()}\n${paidAllAutoNote}` : paidAllAutoNote;
+          previewCustomer.payment_method = manualNote ? `${manualNote} | ${combinedAutoNote}` : ` | ${combinedAutoNote}`;
         } else {
-          previewCustomer.payment_method = manualNote;
+          const { autoNote: previousAutoNote } = splitPaymentMethod(customer.payment_method);
+          previewCustomer.payment_method = manualNote ? `${manualNote} | ${previousAutoNote}` : (previousAutoNote ? ` | ${previousAutoNote}` : "");
         }
         if (editValue === "Ödendi") {
           previewCustomer.price = 0;
         }
       }
+    } else if (editField.key === "phone_number") {
+      const norm = normalizePhone(editValue);
+      (previewCustomer as unknown as Record<string, unknown>)[editField.key] = norm || editValue;
     } else {
-      (previewCustomer as any)[editField.key] = editValue;
+      (previewCustomer as unknown as Record<string, unknown>)[editField.key] = editValue;
     }
   }
+
+  const previewAnimals = parseAnimalNumbers(customer.number);
+  const printAnimalLabel = previewAnimals.length > 1
+    ? previewAnimals.join(", ")
+    : (previewAnimals[0] ?? customer.number);
 
   return (
     <>
@@ -507,7 +542,6 @@ export function CustomerCard({ customer }: CustomerCardProps) {
         c={customer}
         onFieldClick={handleFieldClick}
         onPrintClick={() => setPrintOpen(true)}
-        autoHistoryRows={autoHistoryRows}
       />
 
       {/* Fiş Yazdır Dialog */}
@@ -547,8 +581,12 @@ export function CustomerCard({ customer }: CustomerCardProps) {
                   {printTitle}
                 </div>
                 <div className="text-center mb-3">
-                  <div className="text-[10px] uppercase font-bold tracking-widest text-neutral-800">HAYVAN NO</div>
-                  <div className="text-[40px] font-black leading-none my-1">{customer.number}</div>
+                  <div className="text-[10px] uppercase font-bold tracking-widest text-neutral-800">
+                    HAYVAN NO{previewAnimals.length > 1 ? "LARI" : ""}
+                  </div>
+                  <div className={`${previewAnimals.length > 1 ? "text-[24px]" : "text-[40px]"} font-black leading-none my-1 break-words`}>
+                    {printAnimalLabel}
+                  </div>
                 </div>
                 <div className="space-y-1 border-b border-dashed border-black pb-3 mb-3">
                   <div className="flex justify-between gap-2">
@@ -557,7 +595,7 @@ export function CustomerCard({ customer }: CustomerCardProps) {
                   </div>
                   <div className="flex justify-between gap-2">
                     <span className="font-bold">Telefon:</span>
-                    <span className="text-right">{customer.phone_number || "-"}</span>
+                    <span className="text-right">{formatPhoneDisplay(customer.phone_number) || "-"}</span>
                   </div>
                 </div>
                 <div className="space-y-1 border-b border-dashed border-black pb-3 mb-3">
@@ -696,9 +734,15 @@ export function CustomerCard({ customer }: CustomerCardProps) {
                         inputMode={editField?.key === "price" ? "decimal" : editField?.key === "phone_number" ? "tel" : undefined}
                         placeholder={
                           editField?.key === "price" ? "Örn: 15.400,50" :
-                            editField?.key === "phone_number" ? "Örn: 0532 123 45 67" : "Yeni değer"
+                            editField?.key === "phone_number" ? "Örn: 0532 123 45 67" :
+                              editField?.key === "number" ? "Örn: 101 veya 101, 102, 103" : "Yeni değer"
                         }
                       />
+                    )}
+                    {editField?.key === "number" && (
+                      <p className="text-xs text-muted-foreground">
+                        Birden fazla hayvan için virgülle ayırın (örn. 101, 102, 103).
+                      </p>
                     )}
                   </>
                 )}
@@ -714,7 +758,7 @@ export function CustomerCard({ customer }: CustomerCardProps) {
             {/* Preview */}
             <div className="flex-1 bg-neutral-100 dark:bg-neutral-900/50 p-4 rounded-xl border border-border flex items-center justify-center">
               <div className="w-full pointer-events-none">
-                <CustomerCardInner c={previewCustomer} isPreview autoHistoryRows={autoHistoryRows} />
+                <CustomerCardInner c={previewCustomer} isPreview />
               </div>
             </div>
           </div>

@@ -43,6 +43,7 @@ const SNAPSHOT_FIELDS: { key: keyof CustomerSnapshot; label: string }[] = [
 
 function customerToSnapshot(c: Customer): CustomerSnapshot {
   return {
+    random_id: c.random_id,
     number: c.number,
     type: c.type,
     special: c.special,
@@ -128,12 +129,15 @@ function diffSnapshots(
 
 interface Props {
   hayvanNumber: string | null;
+  /** Composite key parçası: tercih edilen tarama anahtarı (kayıt başına benzersiz). */
+  randomId?: string | null;
   /** Güncel kayıt — son olayın “sonrası” ve alan karşılaştırması için */
   currentCustomer?: Customer | null;
 }
 
 export function CustomerHistoryPanel({
   hayvanNumber,
+  randomId,
   currentCustomer,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -158,7 +162,7 @@ export function CustomerHistoryPanel({
     if (!hayvanNumber) return;
     let cancelled = false;
     const supabase = createClient();
-    getCustomerHistory(supabase, hayvanNumber)
+    getCustomerHistory(supabase, hayvanNumber, randomId ?? null)
       .then((data) => {
         if (!cancelled) {
           setErr("");
@@ -175,7 +179,7 @@ export function CustomerHistoryPanel({
     return () => {
       cancelled = true;
     };
-  }, [hayvanNumber]);
+  }, [hayvanNumber, randomId]);
 
   if (!hayvanNumber) return null;
 

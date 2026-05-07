@@ -6,7 +6,8 @@ import { CustomerCard } from "@/components/customer-card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, Download, ChevronDown, ChevronUp, LayoutGrid, Layers } from "lucide-react";
-import { compareHayvanNumarasi, formatPrice } from "@/lib/utils";
+import { compareHayvanNumarasi, formatPrice, formatPhoneDisplay } from "@/lib/utils";
+import * as XLSX from "xlsx";
 
 const PAGE_SIZE = 12;
 
@@ -35,27 +36,21 @@ function sortCustomers(list: Customer[], field: SortField, dir: SortDir): Custom
   });
 }
 
-function toCSV(customers: Customer[]): string {
+function downloadExcel(customers: Customer[], filename: string) {
   const headers = [
-    "Numara","Cins","Özellik","Küpe Rengi","Hayvan Rengi","Sıkılan Boya","Sahip","Kimden",
-    "Fiyat (TL)","Telefon","Ödeme Detayı","Ödeme Durumu","Grup Kategorisi","Adres","Not",
+    "Random ID", "Numara", "Cins", "Özellik", "Küpe Rengi", "Hayvan Rengi", "Sıkılan Boya", "Sahip", "Kimden",
+    "Fiyat (TL)", "Telefon", "Ödeme Detayı", "Ödeme Durumu", "Grup Kategorisi", "Adres", "Not"
   ];
   const rows = customers.map((c) => [
-    c.number, c.type, c.special, c.color_of_earring, c.color_of_animal, c.spray_paint_color,
-    c.whose, c.from_whom, c.price, c.phone_number, c.payment_method, c.payment_status,
-    c.group_category, c.address, c.note ?? "",
-  ].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","));
-  return "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
-}
+    c.random_id, c.number, c.type, c.special, c.color_of_earring, c.color_of_animal, c.spray_paint_color,
+    c.whose, c.from_whom, c.price, formatPhoneDisplay(c.phone_number), c.payment_method, c.payment_status,
+    c.group_category, c.address, c.note ?? ""
+  ]);
 
-function downloadCSV(customers: Customer[], filename: string) {
-  const blob = new Blob([toCSV(customers)], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Müşteriler");
+  XLSX.writeFile(workbook, filename);
 }
 
 interface Props { initialCustomers: Customer[] }
@@ -76,13 +71,13 @@ function GroupPanel({
   const total = customers.reduce((s, c) => s + Number(c.price ?? 0), 0);
 
   return (
-    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+    <div className="group premium-card-interactive rounded-xl border border-border bg-card overflow-hidden">
       {/* Başlık satırı */}
       <div
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors text-left cursor-pointer"
       >
-        <span className="text-lg">{icon}</span>
+        <span className="text-lg transition-transform duration-300 group-hover:scale-125 origin-center">{icon}</span>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm text-foreground truncate">{groupName}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -97,13 +92,13 @@ function GroupPanel({
             onClick={(e) => {
               e.stopPropagation();
               const safeName = groupName.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ0-9\s]/g, "").trim();
-              downloadCSV(customers, `${safeName}.csv`);
+              downloadExcel(customers, `${safeName}.xlsx`);
             }}
             className="h-7 px-2 text-xs"
             disabled={customers.length === 0}
           >
             <Download className="h-3 w-3 mr-1" />
-            CSV
+            Excel
           </Button>
           {open ? (
             <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -120,8 +115,8 @@ function GroupPanel({
             <p className="text-center text-muted-foreground py-6 text-sm">Bu grupta kayıt bulunmuyor.</p>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {customers.map((c) => (
-                <CustomerCard key={c.number} customer={c} />
+              {customers.map((c, i) => (
+                <CustomerCard key={c.random_id || `${c.phone_number}-${c.number}-${i}`} customer={c} />
               ))}
             </div>
           )}
@@ -246,15 +241,15 @@ export function CustomersClient({ initialCustomers }: Props) {
           </div>
         )}
 
-        {/* Tüm CSV indirme */}
+        {/* Tüm Excel indirme */}
         <Button
           variant="outline"
           size="sm"
-          onClick={() => downloadCSV(sorted, "musteriler.csv")}
+          onClick={() => downloadExcel(sorted, "musteriler.xlsx")}
           className="w-full sm:w-auto sm:ml-auto"
         >
           <Download className="h-4 w-4 mr-2" />
-          Tümünü CSV İndir
+          Tümünü Excel İndir
         </Button>
       </div>
 
@@ -265,8 +260,8 @@ export function CustomersClient({ initialCustomers }: Props) {
             <p className="text-center text-muted-foreground py-12">Kayıtlı müşteri bulunamadı.</p>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {paginated.map((c) => (
-                <CustomerCard key={c.number} customer={c} />
+              {paginated.map((c, i) => (
+                <CustomerCard key={c.random_id || `${c.phone_number}-${c.number}-${i}`} customer={c} />
               ))}
             </div>
           )}

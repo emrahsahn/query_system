@@ -4,7 +4,7 @@ import { Providers } from "@/components/providers";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
-  title: "Kurbanlık Takip Sistemi",
+  title: "Kurban Yönetim Sistemi",
   description: "Kurbanlık hayvanların müşteri takibini kolaylaştıran sistem.",
 };
 
