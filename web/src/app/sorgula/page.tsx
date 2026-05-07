@@ -154,10 +154,17 @@ export default function SorgulaPage() {
                 <strong>{results.length}</strong> kayıt bulundu.
               </p>
               <div className="space-y-6">
-                {results.map((c) => (
-                  <div key={c.number} className="space-y-3">
+                {results.map((c, i) => (
+                  <div
+                    key={c.random_id || `${c.phone_number}-${c.number}-${i}`}
+                    className="space-y-3"
+                  >
                     <CustomerCard customer={c} />
-                    <CustomerHistoryPanel hayvanNumber={c.number} currentCustomer={c} />
+                    <CustomerHistoryPanel
+                      hayvanNumber={c.number}
+                      randomId={c.random_id}
+                      currentCustomer={c}
+                    />
                   </div>
                 ))}
               </div>

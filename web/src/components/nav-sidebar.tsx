@@ -39,14 +39,14 @@ export function NavSidebar({ className, onNavClick }: NavSidebarProps) {
       <div className="flex items-center gap-3 px-6 py-5 shrink-0">
         <Image
           src="/logo.jpeg"
-          alt="Kurbanlık Takip Sistemi"
+          alt="Kurban Yönetim Sistemi"
           width={40}
           height={40}
           className="h-10 w-10 shrink-0 object-contain"
           priority
         />
         <div>
-          <h1 className="text-base font-bold leading-tight">Kurbanlık Takip Sistemi</h1>
+          <h1 className="text-base font-bold leading-tight">Kurban Yönetim Sistemi</h1>
         </div>
       </div>
 
