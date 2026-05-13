@@ -3,7 +3,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NavSidebar } from "@/components/nav-sidebar";
 
@@ -21,6 +21,7 @@ export function MobileTopbar() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="p-0 w-72">
+            <SheetTitle className="sr-only">Navigasyon menüsü</SheetTitle>
             <NavSidebar onNavClick={() => setOpen(false)} />
           </SheetContent>
         </Sheet>
