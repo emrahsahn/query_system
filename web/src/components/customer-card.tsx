@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Customer, CustomerKey, PaymentStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -78,7 +78,62 @@ function customerKey(c: Customer): CustomerKey {
   };
 }
 
-function printReceipt(customer: Customer, title: string) {
+const RECEIPT_DAILY_SEQ_KEY = "receiptDailySeq";
+
+function localDateYmd(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Bugün için bir sonraki önerilen sıra numarası (gün değişince 1). */
+function readReceiptDailyNext(): number {
+  if (typeof window === "undefined") return 1;
+  try {
+    const raw = localStorage.getItem(RECEIPT_DAILY_SEQ_KEY);
+    if (!raw) return 1;
+    const parsed = JSON.parse(raw) as { date?: string; next?: number };
+    const today = localDateYmd();
+    if (parsed.date !== today || typeof parsed.next !== "number" || !Number.isFinite(parsed.next)) {
+      return 1;
+    }
+    return Math.max(1, Math.floor(parsed.next));
+  } catch {
+    return 1;
+  }
+}
+
+/** Yazdırmadan sonra sayacı günceller: next = max(mevcut next, kullanılan) + 1 */
+function persistReceiptDailyAfterPrint(usedSeq: number): void {
+  if (typeof window === "undefined") return;
+  const today = localDateYmd();
+  let storedNext = 1;
+  try {
+    const raw = localStorage.getItem(RECEIPT_DAILY_SEQ_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { date?: string; next?: number };
+      if (parsed.date === today && typeof parsed.next === "number" && Number.isFinite(parsed.next)) {
+        storedNext = Math.max(1, Math.floor(parsed.next));
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  const next = Math.max(storedNext, usedSeq) + 1;
+  localStorage.setItem(RECEIPT_DAILY_SEQ_KEY, JSON.stringify({ date: today, next }));
+}
+
+function printReceipt(customer: Customer, title: string, queueDisplay: string) {
   const iframe = document.createElement("iframe");
   iframe.style.display = "none";
   document.body.appendChild(iframe);
@@ -89,6 +144,17 @@ function printReceipt(customer: Customer, title: string) {
   const animalNumberStyle = isMulti
     ? "text-30 font-black"
     : "text-40 font-black";
+
+  const safeTitle = escapeHtml(title);
+  const safeQueue = escapeHtml(queueDisplay);
+  const safeAnimal = escapeHtml(String(animalDisplay));
+  const safeWhose = escapeHtml(customer.whose || "-");
+  const safePhone = escapeHtml(formatPhoneDisplay(customer.phone_number) || "-");
+  const safeType = escapeHtml(customer.type || "-");
+  const safeEarring = escapeHtml(customer.color_of_earring || "-");
+  const safeSpray = escapeHtml(customer.spray_paint_color || "-");
+  const safeAnimalColor = escapeHtml(customer.color_of_animal || "-");
+  const safeSpecial = customer.special ? escapeHtml(customer.special) : "";
 
   const content = `
     <html>
@@ -105,7 +171,10 @@ function printReceipt(customer: Customer, title: string) {
             font-family: 'Courier New', Courier, monospace;
             -webkit-print-color-adjust: exact;
           }
-          .title { text-align: center; font-weight: bold; font-size: 13px; margin-bottom: 12px; border-bottom: 1px solid black; padding-bottom: 8px; word-break: break-word; line-height: 1.2; }
+          .title { text-align: center; font-weight: bold; font-size: 13px; margin-bottom: 0; border-bottom: 1px solid black; padding-bottom: 8px; word-break: break-word; line-height: 1.2; }
+          .queue-block { text-align: center; border-bottom: 1px solid black; padding: 8px 0 10px; margin-bottom: 10px; }
+          .queue-label { font-size: 8px; letter-spacing: 1px; color: #555; font-weight: bold; text-transform: uppercase; }
+          .queue-val { font-size: 10px; font-weight: 600; margin-top: 4px; color: #333; }
           .center { text-align: center; }
           .mb-3 { margin-bottom: 12px; }
           .text-10 { font-size: 10px; }
@@ -116,33 +185,38 @@ function printReceipt(customer: Customer, title: string) {
           .flex { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px;}
           .font-bold { font-weight: bold; }
           .border-b { border-bottom: 1px dashed black; padding-bottom: 12px; margin-bottom: 12px; }
+          .kupe-wrap { border-bottom: 1px solid black; padding-bottom: 10px; margin-bottom: 12px; }
           .italic { font-style: italic; }
           .mt-2 { margin-top: 8px; }
           .break-words { word-break: break-word; }
         </style>
       </head>
       <body>
-        <div class="title">${title}</div>
-        <div class="center mb-3">
-          <div class="text-10 uppercase font-bold" style="letter-spacing: 1px; color: #333;">HAYVAN NO${isMulti ? "LARI" : ""}</div>
-          <div class="${animalNumberStyle}">${animalDisplay}</div>
+        <div class="title">${safeTitle}</div>
+        <div class="queue-block">
+          <div class="queue-label">Sıra No</div>
+          <div class="queue-val">${safeQueue}</div>
+        </div>
+        <div class="center kupe-wrap">
+          <div class="text-10 uppercase font-bold" style="letter-spacing: 1px; color: #333;">${isMulti ? "Küpe Noları" : "Küpe No"}</div>
+          <div class="${animalNumberStyle}">${safeAnimal}</div>
         </div>
         <div class="border-b">
-          <div class="flex"><span class="font-bold">Sahip:</span> <span class="uppercase break-words" style="text-align: right;">${customer.whose || "-"}</span></div>
-          <div class="flex"><span class="font-bold">Telefon:</span> <span>${formatPhoneDisplay(customer.phone_number) || "-"}</span></div>
-        </div>
-        <div class="border-b">
-          <div class="flex"><span class="font-bold">Tür/Cins:</span> <span>${customer.type || "-"}</span></div>
-          <div class="flex"><span class="font-bold">Küpe No:</span> <span>${customer.color_of_earring || "-"}</span></div>
-          <div class="flex"><span class="font-bold">Renk:</span> <span>${customer.color_of_animal || "-"}</span></div>
-          <div class="flex"><span class="font-bold">Boya:</span> <span>${customer.spray_paint_color || "-"}</span></div>
-          ${customer.special
-      ? `<div class="mt-2" style="font-size: 11px; background: #f0f0f0; padding: 4px; border-radius: 2px;">
+          <div class="flex"><span class="font-bold">Tür/Cins:</span> <span class="break-words" style="text-align: right;">${safeType}</span></div>
+          <div class="flex"><span class="font-bold">Küpe Rengi:</span> <span>${safeEarring}</span></div>
+          <div class="flex"><span class="font-bold">Sıkılan Boya:</span> <span>${safeSpray}</span></div>
+          <div class="flex"><span class="font-bold">Hayvan Rengi:</span> <span>${safeAnimalColor}</span></div>
+          ${safeSpecial
+      ? `<div class="mt-2" style="font-size: 9px; background: #f0f0f0; padding: 4px; border-radius: 2px;">
                    <div class="font-bold" style="margin-bottom: 2px;">Özellik:</div>
-                   <div class="break-words" style="line-height: 1.2;">${customer.special}</div>
+                   <div class="break-words" style="line-height: 1.2;">${safeSpecial}</div>
                  </div>`
       : ""
     }
+        </div>
+        <div class="border-b">
+          <div class="flex"><span class="font-bold">Sahip:</span> <span class="uppercase break-words" style="text-align: right;">${safeWhose}</span></div>
+          <div class="flex"><span class="font-bold">Telefon:</span> <span>${safePhone}</span></div>
         </div>
         <div class="center text-10 italic font-bold" style="margin-top: 16px; opacity: 0.9;">
           Bizi tercih ettiğiniz için<br>teşekkür ederiz.
@@ -373,6 +447,7 @@ interface CustomerCardProps {
 export function CustomerCard({ customer }: CustomerCardProps) {
   const [printOpen, setPrintOpen] = useState(false);
   const [printTitle, setPrintTitle] = useState("2026 Kurbanlık Organizasyonu");
+  const [printQueueNo, setPrintQueueNo] = useState("1");
 
   const [editOpen, setEditOpen] = useState(false);
   const [editField, setEditField] = useState<{ label: string, key: string, value: string } | null>(null);
@@ -383,8 +458,23 @@ export function CustomerCard({ customer }: CustomerCardProps) {
   const [error, setError] = useState("");
   const key: CustomerKey = useMemo(() => customerKey(customer), [customer]);
 
+  const syncPrintQueueFromStorage = () => {
+    setPrintQueueNo(String(readReceiptDailyNext()));
+  };
+
+  const openPrintDialog = () => {
+    syncPrintQueueFromStorage();
+    setPrintOpen(true);
+  };
+
   const handlePrint = () => {
-    printReceipt(customer, printTitle);
+    const raw = printQueueNo.trim();
+    const display = raw === "" ? "-" : raw;
+    printReceipt(customer, printTitle, display);
+    const parsed = parseInt(raw, 10);
+    if (raw !== "" && Number.isFinite(parsed) && parsed > 0) {
+      persistReceiptDailyAfterPrint(parsed);
+    }
     setPrintOpen(false);
   };
 
@@ -541,16 +631,22 @@ export function CustomerCard({ customer }: CustomerCardProps) {
       <CustomerCardInner
         c={customer}
         onFieldClick={handleFieldClick}
-        onPrintClick={() => setPrintOpen(true)}
+        onPrintClick={openPrintDialog}
       />
 
       {/* Fiş Yazdır Dialog */}
-      <Dialog open={printOpen} onOpenChange={setPrintOpen}>
+      <Dialog
+        open={printOpen}
+        onOpenChange={(open) => {
+          setPrintOpen(open);
+          if (open) syncPrintQueueFromStorage();
+        }}
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>🖨️ Fiş Yazdır</DialogTitle>
             <DialogDescription>
-              Fiş başlığını düzenleyin. Sağ tarafta fişin nasıl görüneceğini görebilirsiniz.
+              Fiş başlığı ve sıra numarasını düzenleyin. Sıra numarası her gün sıfırlanır; sağda önizleme görünür.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col md:flex-row gap-6 py-4">
@@ -569,6 +665,22 @@ export function CustomerCard({ customer }: CustomerCardProps) {
                   Bu başlık sadece bu fiş için geçerli olacaktır.
                 </p>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="printQueueNo" className="text-base font-semibold">
+                  Sıra No
+                </Label>
+                <Input
+                  id="printQueueNo"
+                  inputMode="numeric"
+                  value={printQueueNo}
+                  onChange={(e) => setPrintQueueNo(e.target.value)}
+                  placeholder="1"
+                  className="text-center font-semibold"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Varsayılan günlük sıradır; yazdırdıktan sonra bir sonraki fiş için otomatik artar.
+                </p>
+              </div>
               <Button onClick={handlePrint} size="lg" className="w-full font-bold text-base">
                 🖨️ Yazdır
               </Button>
@@ -577,25 +689,23 @@ export function CustomerCard({ customer }: CustomerCardProps) {
             {/* Sağ Taraf - Önizleme */}
             <div className="flex justify-center bg-neutral-200/50 dark:bg-neutral-900 p-4 rounded-xl border border-border">
               <div className="w-[220px] bg-white text-black p-[12px] font-mono text-[11px] leading-tight shadow-sm border border-neutral-300 shrink-0">
-                <div className="text-center font-bold text-[13px] mb-3 border-b border-black pb-2 break-words">
+                <div className="text-center font-bold text-[13px] border-b border-black pb-2 break-words">
                   {printTitle}
                 </div>
-                <div className="text-center mb-3">
+                <div className="text-center border-b border-black py-2 mb-2.5">
+                  <div className="text-[8px] font-bold uppercase tracking-widest text-neutral-600">
+                    Sıra No
+                  </div>
+                  <div className="text-[10px] font-semibold text-neutral-800 mt-1">
+                    {printQueueNo.trim() === "" ? "—" : printQueueNo.trim()}
+                  </div>
+                </div>
+                <div className="text-center border-b border-black pb-2.5 mb-3">
                   <div className="text-[10px] uppercase font-bold tracking-widest text-neutral-800">
-                    HAYVAN NO{previewAnimals.length > 1 ? "LARI" : ""}
+                    {previewAnimals.length > 1 ? "Küpe Noları" : "Küpe No"}
                   </div>
                   <div className={`${previewAnimals.length > 1 ? "text-[24px]" : "text-[40px]"} font-black leading-none my-1 break-words`}>
                     {printAnimalLabel}
-                  </div>
-                </div>
-                <div className="space-y-1 border-b border-dashed border-black pb-3 mb-3">
-                  <div className="flex justify-between gap-2">
-                    <span className="font-bold">Sahip:</span>
-                    <span className="text-right uppercase font-semibold break-words">{customer.whose || "-"}</span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="font-bold">Telefon:</span>
-                    <span className="text-right">{formatPhoneDisplay(customer.phone_number) || "-"}</span>
                   </div>
                 </div>
                 <div className="space-y-1 border-b border-dashed border-black pb-3 mb-3">
@@ -608,19 +718,29 @@ export function CustomerCard({ customer }: CustomerCardProps) {
                     <span className="text-right">{customer.color_of_earring || "-"}</span>
                   </div>
                   <div className="flex justify-between gap-1">
+                    <span className="font-bold">Sıkılan Boya:</span>
+                    <span className="text-right truncate">{customer.spray_paint_color || "-"}</span>
+                  </div>
+                  <div className="flex justify-between gap-1">
                     <span className="font-bold">Hayvan Rengi:</span>
                     <span className="text-right truncate">{customer.color_of_animal || "-"}</span>
                   </div>
-                  <div className="flex justify-between gap-1">
-                    <span className="font-bold">Boya:</span>
-                    <span className="text-right truncate">{customer.spray_paint_color || "-"}</span>
-                  </div>
                   {customer.special && (
-                    <div className="mt-1.5 bg-neutral-100 p-1 rounded-sm">
+                    <div className="mt-1.5 bg-neutral-100 p-1 rounded-sm text-[9px]">
                       <div className="font-bold mb-0.5">Özellik:</div>
                       <div className="break-words">{customer.special}</div>
                     </div>
                   )}
+                </div>
+                <div className="space-y-1 border-b border-dashed border-black pb-3 mb-3">
+                  <div className="flex justify-between gap-2">
+                    <span className="font-bold">Sahip:</span>
+                    <span className="text-right uppercase font-semibold break-words">{customer.whose || "-"}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="font-bold">Telefon:</span>
+                    <span className="text-right">{formatPhoneDisplay(customer.phone_number) || "-"}</span>
+                  </div>
                 </div>
                 <div className="text-center text-[10px] mt-4 mb-2 font-bold italic opacity-90">
                   Bizi tercih ettiğiniz için<br />teşekkür ederiz.
